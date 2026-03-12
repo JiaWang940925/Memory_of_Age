@@ -4,31 +4,31 @@
 
 @layer base {
   :root {
-    /* 温暖的配色系统 - 适合老年人 */
-    --background: 40 33% 97%; /* 柔和米白 */
-    --foreground: 25 25% 20%; /* 深棕色文字，易读 */
+    /* 安静、温暖、像纸本相册的配色 */
+    --background: 36 38% 96%;
+    --foreground: 24 18% 22%;
 
-    --primary: 32 80% 55%; /* 温暖琥珀色 */
+    --primary: 24 46% 54%;
     --primary-foreground: 40 33% 98%;
-    --primary-light: 38 90% 65%; /* 浅琥珀 */
+    --primary-light: 31 62% 68%;
 
-    --secondary: 150 30% 45%; /* 柔和绿色 - 希望 */
+    --secondary: 150 17% 43%;
     --secondary-foreground: 150 30% 98%;
 
-    --accent: 20 60% 92%; /* 温暖浅色 */
+    --accent: 32 54% 92%;
     --accent-foreground: 25 25% 25%;
 
-    --muted: 35 20% 90%;
-    --muted-foreground: 25 15% 45%;
+    --muted: 34 24% 89%;
+    --muted-foreground: 25 12% 43%;
 
-    --card: 40 40% 99%;
+    --card: 42 45% 98%;
     --card-foreground: 25 25% 20%;
 
-    --border: 35 25% 85%;
-    --ring: 32 80% 55%;
+    --border: 30 20% 82%;
+    --ring: 24 46% 54%;
 
-    --success: 145 50% 45%; /* 积极情绪 */
-    --warning: 45 90% 55%; /* 需要关注 */
+    --success: 148 28% 40%;
+    --warning: 40 72% 54%;
 
     --radius: 1rem;
     --font-sans: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
@@ -45,6 +45,11 @@
     font-family: var(--font-sans);
     font-size: 1.375rem;
     line-height: 1.9;
+    background-image:
+      radial-gradient(circle at top left, rgba(255, 239, 214, 0.82), transparent 26%),
+      radial-gradient(circle at 85% 8%, rgba(206, 223, 209, 0.38), transparent 22%),
+      linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(247, 239, 227, 0.92));
+    background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -75,7 +80,7 @@
            text-elder-lg font-semibold
            shadow-warm hover:shadow-warm-lg
            transition-all duration-300 ease-out
-           hover:scale-[1.02] active:scale-[0.98];
+           hover:-translate-y-0.5 active:translate-y-0;
   }
 
   .btn-secondary {
@@ -91,14 +96,14 @@
            text-primary px-10 py-5 rounded-xl min-h-[4.75rem]
            text-elder-lg font-semibold
            transition-all duration-300 ease-out
-           hover:bg-primary hover:text-primary-foreground;
+           hover:bg-primary/10;
   }
 
   /* 卡片样式 */
   .card-warm {
-    @apply bg-card rounded-2xl p-6 shadow-card
-           border border-border/50
-           transition-all duration-300;
+    @apply rounded-[1.75rem] p-6 shadow-card border backdrop-blur-[2px] transition-all duration-300;
+    background-color: hsl(var(--card) / 0.9);
+    border-color: hsl(var(--border) / 0.7);
   }
 
   .card-warm:hover {
@@ -142,7 +147,7 @@
            rounded-2xl px-7 py-5 min-h-[8.5rem]
            text-elder-lg text-foreground
            placeholder:text-muted-foreground
-           focus:border-primary focus:ring-2 focus:ring-primary/20
+           focus:border-primary focus:ring-2 focus:ring-primary/15
            transition-all duration-200 outline-none;
   }
 
@@ -176,8 +181,8 @@
   .gradient-soft {
     background: linear-gradient(
       180deg,
-      hsl(var(--background)) 0%,
-      hsl(var(--accent)) 100%
+      rgba(255, 250, 244, 0.98) 0%,
+      rgba(244, 233, 217, 0.94) 100%
     );
   }
 
@@ -188,5 +193,222 @@
       hsl(var(--primary)) 0%,
       hsl(var(--secondary)) 100%
     );
+  }
+
+  .journey-noise {
+    background-image:
+      radial-gradient(circle at 18% 18%, rgba(255, 245, 224, 0.85) 0%, rgba(255, 245, 224, 0) 28%),
+      radial-gradient(circle at 82% 12%, rgba(255, 214, 162, 0.35) 0%, rgba(255, 214, 162, 0) 24%),
+      radial-gradient(circle at 72% 82%, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 22%);
+  }
+
+  .journey-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  .journey-avatar-glow {
+    box-shadow:
+      0 0 0 14px rgba(255, 255, 255, 0.08),
+      0 30px 60px -26px rgba(0, 0, 0, 0.42);
+  }
+
+  .paper-panel {
+    @apply rounded-[2rem] border p-6 shadow-card backdrop-blur-sm;
+    background-color: hsl(var(--card) / 0.88);
+    border-color: hsl(var(--border) / 0.78);
+    background-image:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 249, 241, 0.88)),
+      radial-gradient(circle at top right, rgba(255, 224, 179, 0.16), transparent 24%);
+  }
+
+  .sketch-map {
+    @apply relative overflow-hidden rounded-[2.25rem] border border-border/80 min-h-[38rem];
+    background-image:
+      linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(248, 240, 230, 0.96)),
+      repeating-linear-gradient(
+        0deg,
+        rgba(163, 132, 103, 0.06) 0,
+        rgba(163, 132, 103, 0.06) 1px,
+        transparent 1px,
+        transparent 36px
+      );
+    box-shadow: 0 22px 44px -30px rgba(92, 67, 43, 0.35);
+  }
+
+  .sketch-map::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(circle at 12% 18%, rgba(201, 157, 113, 0.18), transparent 18%),
+      radial-gradient(circle at 82% 72%, rgba(136, 160, 146, 0.12), transparent 20%);
+    pointer-events: none;
+  }
+
+  .sketch-map-frame {
+    @apply relative rounded-[2.35rem];
+  }
+
+  .sketch-map-viewport {
+    @apply overflow-hidden rounded-[2.35rem];
+  }
+
+  .sketch-map-canvas {
+    @apply min-h-0;
+    transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+
+  .sketch-map-edge {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 5.5rem;
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .sketch-map-edge.left {
+    left: 0;
+    background: linear-gradient(90deg, rgba(246, 239, 229, 0.94), rgba(246, 239, 229, 0));
+  }
+
+  .sketch-map-edge.right {
+    right: 0;
+    background: linear-gradient(270deg, rgba(246, 239, 229, 0.94), rgba(246, 239, 229, 0));
+  }
+
+  .sketch-route-outline {
+    fill: none;
+    stroke: rgba(129, 102, 80, 0.24);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 22px;
+  }
+
+  .sketch-route-main {
+    fill: none;
+    stroke: rgba(129, 102, 80, 0.7);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 10px;
+    stroke-dasharray: 2 0;
+  }
+
+  .sketch-route-branch {
+    fill: none;
+    stroke: rgba(91, 116, 119, 0.58);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 5px;
+    stroke-dasharray: 8 14;
+  }
+
+  .sketch-node {
+    @apply absolute z-10 flex w-40 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-3 text-center;
+  }
+
+  .sketch-node-button {
+    @apply flex h-24 w-24 items-center justify-center rounded-[1.55rem] border-2 shadow-card transition-all duration-300;
+    background-color: rgba(255, 252, 247, 0.96);
+    transform: rotate(-2deg);
+  }
+
+  .sketch-node-button.memory {
+    border-color: rgba(140, 102, 76, 0.45);
+    color: rgba(123, 79, 52, 0.92);
+  }
+
+  .sketch-node-button.history {
+    border-color: rgba(89, 113, 117, 0.42);
+    color: rgba(63, 95, 100, 0.94);
+    background-color: rgba(243, 246, 242, 0.96);
+  }
+
+  .sketch-node-button:hover {
+    transform: rotate(0deg) translateY(-2px);
+    box-shadow: 0 18px 34px -24px rgba(77, 58, 40, 0.48);
+  }
+
+  .sketch-node-button.active {
+    transform: rotate(0deg) scale(1.06);
+    box-shadow: 0 20px 40px -22px rgba(101, 72, 43, 0.48);
+  }
+
+  .sketch-node-label {
+    @apply rounded-[1.35rem] px-4 py-3 transition-all duration-300;
+    background: rgba(255, 251, 246, 0.82);
+    box-shadow: 0 18px 30px -28px rgba(92, 67, 43, 0.45);
+  }
+
+  .sketch-node-label.active {
+    background: rgba(255, 246, 230, 0.94);
+  }
+
+  .map-scroll-button {
+    @apply inline-flex h-14 w-14 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-card transition-all duration-300;
+  }
+
+  .map-scroll-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 20px 34px -28px rgba(92, 67, 43, 0.38);
+  }
+
+  .map-scroll-button:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+  }
+
+  .map-scroll-slider {
+    @apply flex min-w-[18rem] flex-col gap-2 rounded-full border border-border bg-card/90 px-5 py-3 shadow-card;
+  }
+
+  .map-scroll-range {
+    width: 100%;
+    appearance: none;
+    height: 0.55rem;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, rgba(196, 160, 126, 0.34), rgba(139, 168, 154, 0.36));
+    outline: none;
+  }
+
+  .map-scroll-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 9999px;
+    border: 2px solid rgba(255, 250, 244, 0.96);
+    background: linear-gradient(135deg, rgba(190, 132, 85, 0.96), rgba(101, 141, 128, 0.94));
+    box-shadow: 0 10px 18px -12px rgba(88, 62, 40, 0.52);
+    cursor: pointer;
+  }
+
+  .map-scroll-range::-moz-range-thumb {
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 9999px;
+    border: 2px solid rgba(255, 250, 244, 0.96);
+    background: linear-gradient(135deg, rgba(190, 132, 85, 0.96), rgba(101, 141, 128, 0.94));
+    box-shadow: 0 10px 18px -12px rgba(88, 62, 40, 0.52);
+    cursor: pointer;
+  }
+
+  .map-legend-chip {
+    @apply inline-flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2;
+  }
+
+  .map-legend-dot {
+    @apply block h-3.5 w-3.5 rounded-full;
+  }
+
+  .map-legend-dot.memory {
+    background: rgba(142, 101, 75, 0.88);
+  }
+
+  .map-legend-dot.history {
+    background: rgba(81, 114, 117, 0.88);
   }
 }

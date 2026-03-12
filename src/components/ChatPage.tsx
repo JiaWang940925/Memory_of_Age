@@ -1,18 +1,30 @@
-import { useEffect, useRef, useState } from 'react'
-import { Send, BookOpen, Sparkles, RefreshCw, Mic, Square } from 'lucide-react'
-import type { Page, Memory } from '../App'
+import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
+import { Send, BookOpen, Sparkles, RefreshCw, Mic, Square, ImagePlus, X } from 'lucide-react'
+import type { Page, Memory, PhotoAttachment } from '../App'
 import { decodeAudioBlobToMonoPcm } from '../lib/audio'
+import {
+  buildEventReminders,
+  buildInterviewPrompts,
+  buildOpeningQuestion,
+  buildSmartResponse,
+  getInitialAskedPromptIds,
+  pickNextPrompt,
+} from '../lib/conversation'
+import { createPhotoAttachment } from '../lib/images'
 import {
   claimAudioChannel,
   getBrowserSessionId,
+  getSessionScopedKey,
   refreshAudioChannel,
   releaseAudioChannel,
 } from '../lib/session'
+import { buildProfileSummary, type UserProfile } from '../lib/userProfile'
 
 interface ChatPageProps {
   onNavigate: (page: Page) => void
   onAddMemory: (memory: Memory) => void
   memories: Memory[]
+  userProfile: UserProfile
 }
 
 interface Message {
@@ -20,6 +32,7 @@ interface Message {
   role: 'ai' | 'user'
   content: string
   emotion?: 'positive' | 'neutral' | 'attention'
+  photos?: PhotoAttachment[]
 }
 
 interface SpeechRecognitionAlternative {
@@ -79,6 +92,8 @@ declare global {
   }
 }
 
+const MAX_PHOTOS_PER_MEMORY = 4
+
 function analyzeEmotion(text: string): 'positive' | 'neutral' | 'attention' {
   const negativeKeywords = ['难过', '伤心', '后悔', '失去', '遗憾', '痛苦', '孤独', '害怕', '担心', '焦虑', '不幸', '悲伤', '失败', '错过']
   const positiveKeywords = ['开心', '快乐', '幸福', '感谢', '美好', '温暖', '爱', '希望', '成功', '骄傲', '满足', '喜欢']
@@ -86,76 +101,104 @@ function analyzeEmotion(text: string): 'positive' | 'neutral' | 'attention' {
   const hasNegative = negativeKeywords.some((keyword) => text.includes(keyword))
   const hasPositive = positiveKeywords.some((keyword) => text.includes(keyword))
 
-  if (hasNegative && !hasPositive) return 'attention'
-  if (hasPositive) return 'positive'
+  if (hasNegative && !hasPositive) {
+    return 'attention'
+  }
+
+  if (hasPositive) {
+    return 'positive'
+  }
+
   return 'neutral'
 }
 
-const questionCategories = [
-  {
-    category: '童年时光',
-    questions: [
-      '您还记得小时候最喜欢玩的游戏是什么吗？能和我分享一下那时的快乐吗？',
-      '您童年时最好的朋友是谁？你们在一起有什么有趣的故事？',
-      '小时候，家里有什么让您印象深刻的事情吗？',
-    ],
-  },
-  {
-    category: '青春岁月',
-    questions: [
-      '您年轻时有什么梦想？后来实现了吗？',
-      '您还记得第一份工作是什么吗？那时有什么有趣的经历？',
-      '在您成长的过程中，谁对您影响最大？',
-    ],
-  },
-  {
-    category: '家庭故事',
-    questions: [
-      '您和爱人是怎么认识的？能分享这段美好的缘分吗？',
-      '作为父母，您觉得最骄傲的时刻是什么？',
-      '您的家庭中有什么温馨的传统或习惯吗？',
-    ],
-  },
-  {
-    category: '人生智慧',
-    questions: [
-      '回顾人生，您觉得最值得骄傲的成就是什么？',
-      '如果能给年轻时的自己一个建议，您会说什么？',
-      '您认为人生中最重要的是什么？',
-    ],
-  },
-]
+function dedupePromptIds(ids: string[]) {
+  return [...new Set(ids.filter(Boolean))]
+}
 
-const positiveGuidances = [
-  '我能感受到这段记忆对您来说不太容易。不过，每一段经历都让我们变得更加坚强。您觉得从这件事中，您学到了什么呢？',
-  '谢谢您愿意和我分享这些。虽然过程可能艰难，但您度过来了，这本身就是一种力量。现在回想起来，有没有什么让您感到欣慰的地方？',
-  '我理解您的感受。生活中确实有不如意的时候，但正是这些经历塑造了今天的您。能告诉我，在那段时间里，有谁给过您支持和温暖吗？',
-  '感谢您的信任。每个人的人生都有高低起伏，重要的是我们如何看待它们。您觉得这段经历有没有带来什么意想不到的收获？',
-]
+function loadAskedPromptIds(storageKey: string) {
+  if (typeof window === 'undefined') {
+    return []
+  }
 
-const positiveResponses = [
-  '这真是一段美好的回忆！我能感受到您说起这件事时的喜悦。还有什么相关的快乐时光想要分享吗？',
-  '听起来真温馨！这样的时刻确实值得珍藏。能再多讲讲当时的细节吗？',
-  '太棒了！您的故事让我也感到很温暖。这段记忆对您来说一定很特别吧？',
-]
+  try {
+    const raw = window.sessionStorage.getItem(storageKey)
+    if (!raw) {
+      return []
+    }
 
-export function ChatPage({ onNavigate, onAddMemory, memories }: ChatPageProps) {
+    const parsed = JSON.parse(raw) as string[]
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === 'string' && value.length > 0)
+      : []
+  } catch {
+    return []
+  }
+}
+
+function saveAskedPromptIds(storageKey: string, promptIds: string[]) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.sessionStorage.setItem(storageKey, JSON.stringify(dedupePromptIds(promptIds)))
+  } catch {
+    // Ignore storage write failures and keep the in-memory copy usable.
+  }
+}
+
+export function ChatPage({
+  onNavigate,
+  onAddMemory,
+  memories,
+  userProfile,
+}: ChatPageProps) {
+  const sessionIdRef = useRef('')
+  if (!sessionIdRef.current) {
+    sessionIdRef.current = getBrowserSessionId()
+  }
+
+  const askedPromptIdsStorageKeyRef = useRef('')
+  if (!askedPromptIdsStorageKeyRef.current) {
+    askedPromptIdsStorageKeyRef.current = getSessionScopedKey(
+      'asked-prompts',
+      sessionIdRef.current,
+    )
+  }
+
+  const promptPlan = buildInterviewPrompts(userProfile)
+  const eventReminders = buildEventReminders(userProfile)
+  const memoryAskedPromptIds = getInitialAskedPromptIds(promptPlan, memories)
+  const storedAskedPromptIds = loadAskedPromptIds(askedPromptIdsStorageKeyRef.current)
+  const initialCoveredPromptIds = dedupePromptIds([
+    ...storedAskedPromptIds,
+    ...memoryAskedPromptIds,
+  ])
+  const initialPrompt = pickNextPrompt(promptPlan, initialCoveredPromptIds)
+  const initialShownPromptIds = initialPrompt
+    ? dedupePromptIds([...initialCoveredPromptIds, initialPrompt.id])
+    : initialCoveredPromptIds
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       role: 'ai',
-      content: '您好！我是岁语，很高兴能陪您回忆人生中的美好时光。让我们从一个轻松的话题开始吧——您还记得小时候最喜欢玩的游戏是什么吗？能和我分享一下那时的快乐吗？',
+      content: buildOpeningQuestion(userProfile, initialPrompt),
     },
   ])
   const [input, setInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
-  const [currentCategory, setCurrentCategory] = useState(0)
-  const [currentQuestion, setCurrentQuestion] = useState(0)
+  const [currentPromptId, setCurrentPromptId] = useState(initialPrompt?.id ?? '')
+  const [shownPromptIds, setShownPromptIds] = useState<string[]>(initialShownPromptIds)
   const [isListening, setIsListening] = useState(false)
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [voiceEnabled, setVoiceEnabled] = useState(false)
   const [voiceMode, setVoiceMode] = useState<VoiceMode>('unsupported')
   const [voiceStatus, setVoiceStatus] = useState('正在检查语音输入能力')
+  const [selectedPhotos, setSelectedPhotos] = useState<PhotoAttachment[]>([])
+  const [isPreparingPhotos, setIsPreparingPhotos] = useState(false)
+  const [photoStatus, setPhotoStatus] = useState('支持上传老照片，让回忆更完整')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -164,10 +207,21 @@ export function ChatPage({ onNavigate, onAddMemory, memories }: ChatPageProps) {
   const transcriptionWorkerRef = useRef<Worker | null>(null)
   const voiceBaseInputRef = useRef('')
   const voiceFinalTranscriptRef = useRef('')
-  const sessionIdRef = useRef('')
+  const photoInputRef = useRef<HTMLInputElement>(null)
 
-  if (!sessionIdRef.current) {
-    sessionIdRef.current = getBrowserSessionId()
+  const currentPrompt =
+    promptPlan.find((prompt) => prompt.id === currentPromptId) ?? null
+
+  const revealNextPrompt = (existingPromptIds: string[]) => {
+    const nextPrompt = pickNextPrompt(promptPlan, existingPromptIds)
+    if (!nextPrompt) {
+      setCurrentPromptId('')
+      return null
+    }
+
+    setCurrentPromptId(nextPrompt.id)
+    setShownPromptIds(dedupePromptIds([...existingPromptIds, nextPrompt.id]))
+    return nextPrompt
   }
 
   const stopMediaStream = () => {
@@ -179,9 +233,98 @@ export function ChatPage({ onNavigate, onAddMemory, memories }: ChatPageProps) {
     releaseAudioChannel(sessionIdRef.current)
   }
 
+  const openPhotoPicker = () => {
+    const inputElement = photoInputRef.current
+    if (!inputElement || isPreparingPhotos || isTyping || isTranscribing) {
+      return
+    }
+
+    try {
+      if (typeof inputElement.showPicker === 'function') {
+        inputElement.showPicker()
+        return
+      }
+    } catch {
+      // Fall back to click() below if showPicker is unavailable in this browser.
+    }
+
+    inputElement.click()
+  }
+
+  const removeSelectedPhoto = (photoId: string) => {
+    setSelectedPhotos((previous) => {
+      const nextPhotos = previous.filter((photo) => photo.id !== photoId)
+      setPhotoStatus(
+        nextPhotos.length > 0
+          ? `还保留 ${nextPhotos.length} 张照片，可继续配合文字发送`
+          : '支持上传老照片，让回忆更完整',
+      )
+      return nextPhotos
+    })
+  }
+
+  const handlePhotoSelection = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : []
+    event.target.value = ''
+
+    if (!files.length) {
+      return
+    }
+
+    const remainingSlots = MAX_PHOTOS_PER_MEMORY - selectedPhotos.length
+    if (remainingSlots <= 0) {
+      setPhotoStatus(`每段回忆最多添加 ${MAX_PHOTOS_PER_MEMORY} 张照片`)
+      return
+    }
+
+    const acceptedFiles = files
+      .filter((file) => file.type.startsWith('image/'))
+      .slice(0, remainingSlots)
+
+    if (!acceptedFiles.length) {
+      setPhotoStatus('请选择照片文件后再试')
+      return
+    }
+
+    setIsPreparingPhotos(true)
+    setPhotoStatus('正在整理照片，请稍候')
+
+    try {
+      const attachments = await Promise.all(
+        acceptedFiles.map((file) =>
+          createPhotoAttachment(file, {
+            maxDimension: 1280,
+            quality: 0.78,
+          }),
+        ),
+      )
+
+      setSelectedPhotos((previous) => {
+        const nextPhotos = [...previous, ...attachments]
+        setPhotoStatus(`已添加 ${nextPhotos.length} 张照片，可配合文字一起发送`)
+        return nextPhotos
+      })
+    } catch (error) {
+      setPhotoStatus(error instanceof Error ? error.message : '照片处理失败，请换一张再试')
+    } finally {
+      setIsPreparingPhotos(false)
+    }
+  }
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    saveAskedPromptIds(askedPromptIdsStorageKeyRef.current, shownPromptIds)
+  }, [shownPromptIds])
+
+  useEffect(() => {
+    const mergedPromptIds = dedupePromptIds([...shownPromptIds, ...memoryAskedPromptIds])
+    if (mergedPromptIds.length !== shownPromptIds.length) {
+      setShownPromptIds(mergedPromptIds)
+    }
+  }, [memoryAskedPromptIds, shownPromptIds])
 
   useEffect(() => {
     const SpeechRecognitionApi =
@@ -341,88 +484,83 @@ export function ChatPage({ onNavigate, onAddMemory, memories }: ChatPageProps) {
     }
   }, [])
 
-  const generateAIResponse = (emotion: 'positive' | 'neutral' | 'attention') => {
-    if (emotion === 'attention') {
-      return positiveGuidances[Math.floor(Math.random() * positiveGuidances.length)]
-    }
-
-    if (emotion === 'positive') {
-      return positiveResponses[Math.floor(Math.random() * positiveResponses.length)]
-    }
-
-    const nextQuestion = getNextQuestion()
-    return `感谢您的分享！这些记忆都很珍贵。让我们继续聊聊——${nextQuestion}`
-  }
-
-  const getNextQuestion = () => {
-    const category = questionCategories[currentCategory]
-    const question = category.questions[currentQuestion]
-
-    if (currentQuestion < category.questions.length - 1) {
-      setCurrentQuestion((previous) => previous + 1)
-    } else if (currentCategory < questionCategories.length - 1) {
-      setCurrentCategory((previous) => previous + 1)
-      setCurrentQuestion(0)
-    } else {
-      setCurrentCategory(0)
-      setCurrentQuestion(0)
-    }
-
-    return question
-  }
-
   const handleSend = async () => {
-    if (!input.trim() || isTyping || isListening || isTranscribing) return
+    const trimmedInput = input.trim()
+    const hasPhotos = selectedPhotos.length > 0
 
-    const userMessage = input.trim()
-    const emotion = analyzeEmotion(userMessage)
+    if (
+      (!trimmedInput && !hasPhotos)
+      || isTyping
+      || isListening
+      || isTranscribing
+      || isPreparingPhotos
+    ) {
+      return
+    }
+
+    const attachedPhotos = [...selectedPhotos]
+    const userMessage = trimmedInput || `分享了 ${attachedPhotos.length} 张照片`
+    const emotion = analyzeEmotion(trimmedInput || userMessage)
 
     const userMessageItem: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: userMessage,
       emotion,
+      photos: attachedPhotos,
     }
 
     setMessages((previous) => [...previous, userMessageItem])
     setInput('')
+    setSelectedPhotos([])
+    setPhotoStatus('支持上传老照片，让回忆更完整')
 
-    const lastAIMessage = messages.filter((message) => message.role === 'ai').pop()
-    if (lastAIMessage) {
-      const memory: Memory = {
-        id: Date.now().toString(),
-        question: lastAIMessage.content,
-        answer: userMessage,
-        emotion,
-        timestamp: new Date(),
-        category: questionCategories[currentCategory].category,
-      }
-      onAddMemory(memory)
+    const memoryQuestion = currentPrompt?.text ?? '自由补充'
+    const memoryCategory = currentPrompt?.category ?? '自由补充'
+
+    const memory: Memory = {
+      id: Date.now().toString(),
+      question: memoryQuestion,
+      answer: userMessage,
+      emotion,
+      timestamp: new Date(),
+      category: memoryCategory,
+      photos: attachedPhotos,
+      promptId: currentPrompt?.id,
     }
+    onAddMemory(memory)
+
+    const nextPrompt = revealNextPrompt(shownPromptIds)
 
     setIsTyping(true)
-    await new Promise((resolve) => setTimeout(resolve, 1500 + Math.random() * 1000))
+    await new Promise((resolve) => setTimeout(resolve, 900 + Math.random() * 700))
 
     const aiMessage: Message = {
       id: (Date.now() + 1).toString(),
       role: 'ai',
-      content: generateAIResponse(emotion),
+      content: buildSmartResponse({
+        emotion,
+        hasPhotos,
+        nextPrompt,
+      }),
     }
 
     setMessages((previous) => [...previous, aiMessage])
     setIsTyping(false)
   }
 
-  const handleKeyPress = (event: React.KeyboardEvent) => {
+  const handleKeyPress = (event: KeyboardEvent) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
-      handleSend()
+      void handleSend()
     }
   }
 
   const startBrowserRecognition = () => {
     const recognition = recognitionRef.current
-    if (!recognition) return
+    if (!recognition) {
+      return
+    }
 
     if (isListening) {
       releaseVoiceChannel()
@@ -521,7 +659,9 @@ export function ChatPage({ onNavigate, onAddMemory, memories }: ChatPageProps) {
   }
 
   const handleVoiceInput = async () => {
-    if (!voiceEnabled || isTyping || isTranscribing) return
+    if (!voiceEnabled || isTyping || isTranscribing) {
+      return
+    }
 
     if (voiceMode === 'browser') {
       startBrowserRecognition()
@@ -531,6 +671,26 @@ export function ChatPage({ onNavigate, onAddMemory, memories }: ChatPageProps) {
     if (voiceMode === 'local') {
       await startLocalRecording()
     }
+  }
+
+  const handleSwitchTopic = () => {
+    if (isTyping || isListening || isTranscribing) {
+      return
+    }
+
+    const nextPrompt = revealNextPrompt(shownPromptIds)
+    const content = nextPrompt
+      ? `我们换到“${nextPrompt.category}”继续聊：${nextPrompt.text}`
+      : '主线问题已经基本问完了。接下来您可以自由补充任何还想留下的人和事，我不会再重复前面的问题。'
+
+    setMessages((previous) => [
+      ...previous,
+      {
+        id: Date.now().toString(),
+        role: 'ai',
+        content,
+      },
+    ])
   }
 
   const getEmotionLabel = (emotion?: 'positive' | 'neutral' | 'attention') => {
@@ -544,10 +704,14 @@ export function ChatPage({ onNavigate, onAddMemory, memories }: ChatPageProps) {
     }
   }
 
+  const availableReminderTitles = eventReminders
+    .filter((reminder) => !shownPromptIds.includes(reminder.id))
+    .slice(0, 3)
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-card border-b border-border px-6 py-4">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-14 h-14 rounded-full gradient-warm flex items-center justify-center shadow-warm">
               <Sparkles className="w-7 h-7 text-primary-foreground" />
@@ -573,13 +737,34 @@ export function ChatPage({ onNavigate, onAddMemory, memories }: ChatPageProps) {
         </div>
       </header>
 
-      <div className="bg-accent/50 px-6 py-3">
-        <div className="max-w-3xl mx-auto flex items-center justify-center gap-2">
-          <span className="text-elder-sm text-muted-foreground">当前话题：</span>
-          <span className="text-elder-sm font-medium text-foreground">
-            {questionCategories[currentCategory].category}
-          </span>
+      <div className="bg-accent/50 border-b border-border/70 px-6 py-4">
+        <div className="max-w-3xl mx-auto grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-3xl bg-card/80 px-5 py-4 shadow-card">
+            <p className="text-elder-sm text-muted-foreground">当前用户画像</p>
+            <p className="mt-2 text-elder-base text-foreground">
+              {buildProfileSummary(userProfile)}
+            </p>
+          </div>
+          <div className="rounded-3xl bg-card/80 px-5 py-4 shadow-card">
+            <p className="text-elder-sm text-muted-foreground">当前话题</p>
+            <p className="mt-2 text-elder-base font-semibold text-foreground">
+              {currentPrompt?.category ?? '自由补充'}
+            </p>
+          </div>
         </div>
+
+        {availableReminderTitles.length > 0 && (
+          <div className="max-w-3xl mx-auto mt-4 rounded-3xl bg-card/70 px-5 py-4 shadow-card">
+            <p className="text-elder-sm text-muted-foreground">根据出生年代与地点，后面还会重点提醒</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              {availableReminderTitles.map((reminder) => (
+                <span key={reminder.id} className="emotion-tag-neutral">
+                  {reminder.title}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
@@ -592,6 +777,18 @@ export function ChatPage({ onNavigate, onAddMemory, memories }: ChatPageProps) {
               <div className="space-y-2">
                 <div className={message.role === 'ai' ? 'chat-bubble-ai' : 'chat-bubble-user'}>
                   <p className="text-elder-base leading-relaxed">{message.content}</p>
+                  {message.photos && message.photos.length > 0 && (
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      {message.photos.map((photo) => (
+                        <img
+                          key={photo.id}
+                          src={photo.dataUrl}
+                          alt={photo.name}
+                          className="h-32 w-full rounded-2xl object-cover border border-white/30"
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {message.role === 'user' && message.emotion && (
                   <div className="flex justify-end">
@@ -620,21 +817,92 @@ export function ChatPage({ onNavigate, onAddMemory, memories }: ChatPageProps) {
 
       <div className="bg-card border-t border-border px-6 py-4">
         <div className="max-w-3xl mx-auto">
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="sr-only"
+            onChange={handlePhotoSelection}
+          />
+
+          {(selectedPhotos.length > 0 || isPreparingPhotos) && (
+            <div className="mb-4 card-warm space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-elder-base font-semibold text-foreground">本条回忆附带照片</p>
+                  <p className="text-elder-sm text-muted-foreground">
+                    {isPreparingPhotos
+                      ? '正在压缩和整理照片'
+                      : `已选 ${selectedPhotos.length} 张，发送后会一起进入回忆录`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPhotos([])
+                    setPhotoStatus('支持上传老照片，让回忆更完整')
+                  }}
+                  className="text-elder-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  清空照片
+                </button>
+              </div>
+
+              {selectedPhotos.length > 0 && (
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {selectedPhotos.map((photo) => (
+                    <div
+                      key={photo.id}
+                      className="relative overflow-hidden rounded-2xl border border-border bg-accent/30"
+                    >
+                      <img
+                        src={photo.dataUrl}
+                        alt={photo.name}
+                        className="h-28 w-full object-cover"
+                      />
+                      <div className="p-2">
+                        <p className="text-sm text-foreground truncate">{photo.name}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeSelectedPhoto(photo.id)}
+                        className="absolute right-2 top-2 rounded-full bg-card/90 p-1 text-foreground shadow-card"
+                        aria-label={`移除 ${photo.name}`}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col gap-4 xl:flex-row">
             <textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyPress}
               placeholder="请慢慢讲述您的故事..."
               className="input-warm resize-none xl:flex-1"
               rows={3}
             />
-            <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-4 xl:flex xl:w-auto">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:flex xl:w-auto">
+              <button
+                type="button"
+                onClick={openPhotoPicker}
+                disabled={isPreparingPhotos || isTyping || isTranscribing}
+                className="min-h-[5.5rem] rounded-2xl border-2 border-border bg-card px-6 py-4 flex items-center justify-center gap-3 text-elder-lg font-semibold text-foreground shadow-card transition-all duration-300 hover:border-primary hover:shadow-warm disabled:opacity-50 disabled:cursor-not-allowed xl:min-w-[12rem]"
+              >
+                <ImagePlus className="w-7 h-7 flex-shrink-0" />
+                <span>{isPreparingPhotos ? '整理照片' : '添加照片'}</span>
+              </button>
               <button
                 onClick={() => {
                   void handleVoiceInput()
                 }}
-                disabled={!voiceEnabled || isTyping || isTranscribing}
+                disabled={!voiceEnabled || isTyping || isTranscribing || isPreparingPhotos}
                 className={`min-h-[5.5rem] rounded-2xl border-2 px-6 py-4 flex items-center justify-center gap-3 text-elder-lg font-semibold transition-all duration-300 xl:min-w-[12rem] ${
                   isListening
                     ? 'border-secondary bg-secondary text-secondary-foreground shadow-warm animate-pulse-soft'
@@ -657,8 +925,16 @@ export function ChatPage({ onNavigate, onAddMemory, memories }: ChatPageProps) {
                 </span>
               </button>
               <button
-                onClick={handleSend}
-                disabled={!input.trim() || isTyping || isListening || isTranscribing}
+                onClick={() => {
+                  void handleSend()
+                }}
+                disabled={
+                  (!input.trim() && selectedPhotos.length === 0)
+                  || isTyping
+                  || isListening
+                  || isTranscribing
+                  || isPreparingPhotos
+                }
                 className="btn-primary min-h-[5.5rem] w-full px-0 disabled:opacity-50 disabled:cursor-not-allowed xl:min-w-[6.5rem]"
                 aria-label="发送消息"
               >
@@ -675,21 +951,12 @@ export function ChatPage({ onNavigate, onAddMemory, memories }: ChatPageProps) {
             >
               {voiceStatus}
             </span>
+            <span className="text-elder-base text-muted-foreground">{photoStatus}</span>
             <span className="hidden lg:inline text-elder-base text-muted-foreground">
-              语音功能按会话独占，避免与其他 session 冲突
+              已记录的问题不会重复提问，可覆盖童年到晚年多个阶段
             </span>
             <button
-              onClick={() => {
-                const nextQuestion = getNextQuestion()
-                setMessages((previous) => [
-                  ...previous,
-                  {
-                    id: Date.now().toString(),
-                    role: 'ai',
-                    content: `好的，让我们换个话题——${nextQuestion}`,
-                  },
-                ])
-              }}
+              onClick={handleSwitchTopic}
               className="text-elder-base text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors"
             >
               <RefreshCw className="w-5 h-5" />

@@ -16,10 +16,11 @@ const privacyCommitments = [
   '您的故事默认仅在当前设备和当前浏览器会话内处理，不上传到公开网络。',
   '如需保留记录，只保存在本地或以匿名方式整理，不直接暴露个人身份信息。',
   '每个标签页使用独立会话空间，尽量避免与其他正在运行的 session 相互覆盖。',
+  '若您主动使用数字人视频功能，系统会优先在本地调用 SadTalker，用照片和讲述音频生成视频。',
 ]
 
 const privacyAnnouncement =
-  '隐私保护承诺：您的故事仅在当前设备本地处理。如需保留，也只会在本地或匿名存储，不会上传到公开网络。首次使用前，请您先阅读并知晓这些说明。'
+  '隐私保护承诺：您的故事默认仅在当前设备本地处理。如需保留，也只会在本地或匿名存储，不会上传到公开网络。若您主动使用数字人视频功能，系统会优先在本地调用 SadTalker，把照片和讲述音频合成为视频。首次使用前，请您先阅读并知晓这些说明。'
 
 export function WelcomePage({ onStart }: WelcomePageProps) {
   const [needsPrivacyNotice, setNeedsPrivacyNotice] = useState(
@@ -160,7 +161,7 @@ export function WelcomePage({ onStart }: WelcomePageProps) {
               <div>
                 <h2 className="text-elder-lg font-semibold text-foreground mb-2">隐私保护承诺</h2>
                 <p className="text-elder-base text-muted-foreground">
-                  您分享的内容仅用于当前设备本地处理或匿名整理，不上传到公开网络。首次使用时，系统会再用文字和语音提醒一次。
+                  您分享的内容默认仅用于当前设备本地处理或匿名整理，不上传到公开网络。若您主动开启数字人视频，系统会优先使用本地 SadTalker 生成。
                 </p>
               </div>
 
