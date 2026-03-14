@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import type { GeneratedAvatar, Memory, PhotoAttachment } from '../App'
 import { createPhotoAttachment } from '../lib/images'
+import { buildStoryPhotoItems, openMemoryStoryPdf } from '../lib/memoryBook'
 import {
   buildDefaultAvatarNarration,
   createAiVideoJob,
@@ -29,9 +30,11 @@ import {
   type AiVideoProviderInfo,
 } from '../lib/aiVideo'
 import { historicalProfiles } from '../lib/historicalProfiles'
+import type { UserProfile } from '../lib/userProfile'
 
 interface MemoryPageProps {
   memories: Memory[]
+  userProfile: UserProfile | null
   onBack: () => void
   onOpenJourney: () => void
   generatedAvatar: GeneratedAvatar | null
@@ -137,6 +140,7 @@ function getJobStatusText(job: AiVideoJob | null) {
 
 export function MemoryPage({
   memories,
+  userProfile,
   onBack,
   onOpenJourney,
   generatedAvatar,
@@ -157,6 +161,7 @@ export function MemoryPage({
   const [isSubmittingJob, setIsSubmittingJob] = useState(false)
   const [isPreparingPortrait, setIsPreparingPortrait] = useState(false)
   const [isRecordingAudio, setIsRecordingAudio] = useState(false)
+  const [storyExportStatus, setStoryExportStatus] = useState('可打开打印版长页，并另存为 PDF 交给家人保存')
   const portraitInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
   const hasEditedNarrationRef = useRef(false)
@@ -339,6 +344,19 @@ export function MemoryPage({
     (count, memory) => count + memory.photos.length,
     0,
   )
+  const storyPhotoItems = buildStoryPhotoItems(memories)
+  const memoryCategories = Object.keys(groupedMemories)
+
+  const handleOpenStoryPdf = () => {
+    try {
+      openMemoryStoryPdf(memories, userProfile)
+      setStoryExportStatus('打印版已打开，可直接选择“另存为 PDF”')
+    } catch (error) {
+      setStoryExportStatus(
+        error instanceof Error ? error.message : '打印版打开失败，请稍后重试',
+      )
+    }
+  }
 
   const openPortraitPicker = () => {
     if (isPreparingPortrait || isSubmittingJob) {
@@ -545,8 +563,8 @@ export function MemoryPage({
   if (memories.length === 0) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="bg-card border-b border-border px-6 py-4 sticky top-0 z-10">
-          <div className="max-w-5xl mx-auto flex items-center gap-4">
+        <header className="sticky top-0 z-10 border-b border-border bg-card px-4 py-3 sm:px-6 sm:py-4">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 sm:gap-4">
             <button
               onClick={onBack}
               className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center text-foreground hover:bg-accent/80 transition-colors"
@@ -562,7 +580,7 @@ export function MemoryPage({
           </div>
         </header>
 
-        <div className="max-w-5xl mx-auto px-6 py-8">
+        <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
           <div className="text-center py-16">
             <div className="w-20 h-20 rounded-full bg-accent mx-auto mb-6 flex items-center justify-center">
               <Heart className="w-10 h-10 text-primary" />
@@ -573,7 +591,7 @@ export function MemoryPage({
             <p className="text-elder-base text-muted-foreground max-w-sm mx-auto">
               先积累一些文字或照片，后面才能把这些回忆变成会讲述的数字人视频
             </p>
-            <button onClick={onBack} className="btn-primary mt-8">
+            <button onClick={onBack} className="btn-primary mt-8 w-full sm:w-auto">
               开始对话
             </button>
           </div>
@@ -584,8 +602,8 @@ export function MemoryPage({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-card border-b border-border px-6 py-4 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto flex items-center gap-4">
+      <header className="sticky top-0 z-10 border-b border-border bg-card px-4 py-3 sm:px-6 sm:py-4">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 sm:gap-4">
           <button
             onClick={onBack}
             className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center text-foreground hover:bg-accent/80 transition-colors"
@@ -601,7 +619,7 @@ export function MemoryPage({
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         <div className="space-y-10">
           <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
             <article className="relative overflow-hidden rounded-[2rem] border border-border bg-card px-6 py-6 md:px-8 md:py-8">
@@ -646,7 +664,7 @@ export function MemoryPage({
                     : '先生成一段数字人讲述视频，再进入地图，会更像真实的人生口述展览。'}
                 </p>
 
-                <button onClick={onOpenJourney} className="btn-primary">
+                <button onClick={onOpenJourney} className="btn-primary w-full sm:w-auto">
                   <Route className="w-6 h-6" />
                   进入数字人平台
                 </button>
@@ -794,7 +812,7 @@ export function MemoryPage({
 
               {allPhotos.length > 0 ? (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-4">
+                  <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <h3 className="text-elder-base font-semibold text-foreground">从回忆录照片里选择头像</h3>
                     <span className="text-elder-sm text-muted-foreground">
                       共 {allPhotos.length} 张可选
@@ -851,7 +869,7 @@ export function MemoryPage({
                     <img
                       src={selectedPortrait.dataUrl}
                       alt={selectedPortrait.name}
-                      className="h-56 w-56 rounded-3xl object-cover border border-border bg-accent/20"
+                      className="h-56 w-full max-w-[14rem] rounded-3xl border border-border bg-accent/20 object-cover sm:w-56"
                     />
                     <div className="space-y-3">
                       <p className="text-elder-base text-foreground">{portraitSummary}</p>
@@ -1069,6 +1087,128 @@ export function MemoryPage({
             </article>
           </section>
 
+          <section className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
+            <article className="card-warm space-y-5">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <Download className="h-7 w-7" />
+                </div>
+                <div>
+                  <h2 className="text-elder-lg font-semibold text-foreground mb-2">人生故事 PDF</h2>
+                  <p className="text-elder-base text-muted-foreground">
+                    把所有人生故事整理成适合打印的长页版，问题、回答和上传照片都会一起进入文档。
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-3xl bg-accent/35 px-4 py-4">
+                  <p className="text-elder-sm text-muted-foreground">回忆段落</p>
+                  <p className="mt-2 text-elder-base font-semibold text-foreground">
+                    {memories.length} 段
+                  </p>
+                </div>
+                <div className="rounded-3xl bg-accent/35 px-4 py-4">
+                  <p className="text-elder-sm text-muted-foreground">人生章节</p>
+                  <p className="mt-2 text-elder-base font-semibold text-foreground">
+                    {memoryCategories.length} 类
+                  </p>
+                </div>
+                <div className="rounded-3xl bg-accent/35 px-4 py-4">
+                  <p className="text-elder-sm text-muted-foreground">嵌入照片</p>
+                  <p className="mt-2 text-elder-base font-semibold text-foreground">
+                    {storyPhotoItems.length} 张
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-border bg-background px-5 py-5">
+                <p className="text-elder-base font-semibold text-foreground">当前导出说明</p>
+                <p className="mt-3 text-elder-base text-muted-foreground">{storyExportStatus}</p>
+                {memoryCategories.length > 0 ? (
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {memoryCategories.slice(0, 6).map((category) => (
+                      <span key={category} className="emotion-tag-neutral">
+                        {category}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleOpenStoryPdf}
+                className="btn-primary justify-center"
+              >
+                <Download className="w-6 h-6" />
+                打开打印版并另存为 PDF
+              </button>
+            </article>
+
+            <article className="card-warm space-y-5">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-secondary/15 text-secondary">
+                  <ImageIcon className="h-7 w-7" />
+                </div>
+                <div>
+                  <h2 className="text-elder-lg font-semibold text-foreground mb-2">上传照片滚动相册集</h2>
+                  <p className="text-elder-base text-muted-foreground">
+                    把您在不同人生阶段上传的老照片汇总到一起。可直接左右滑动，快速浏览整段人生的图像线索。
+                  </p>
+                </div>
+              </div>
+
+              {storyPhotoItems.length > 0 ? (
+                <>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-elder-base text-muted-foreground">
+                      已汇总 {storyPhotoItems.length} 张照片，按回忆录顺序排列
+                    </p>
+                    <span className="text-elder-sm text-muted-foreground">左右滑动浏览全部照片</span>
+                  </div>
+
+                  <div className="photo-album-scroll overflow-x-auto pb-3">
+                    <div className="flex w-max gap-4 pr-4">
+                      {storyPhotoItems.map((photo) => (
+                        <figure
+                          key={photo.id}
+                          className="photo-album-card overflow-hidden rounded-[1.75rem] border border-border bg-background shadow-card"
+                        >
+                          <img
+                            src={photo.dataUrl}
+                            alt={photo.name}
+                            className="h-56 w-full object-cover"
+                          />
+                          <figcaption className="space-y-3 px-4 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              <span className="emotion-tag-neutral">{photo.category}</span>
+                              <span className="emotion-tag-positive">
+                                {formatDate(photo.timestamp)}
+                              </span>
+                            </div>
+                            <p className="text-elder-base font-semibold text-foreground line-clamp-1">
+                              {photo.name}
+                            </p>
+                            <p className="text-elder-sm text-muted-foreground line-clamp-2">
+                              {photo.answer}
+                            </p>
+                          </figcaption>
+                        </figure>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-3xl border border-dashed border-border bg-accent/20 px-5 py-6">
+                  <p className="text-elder-base text-muted-foreground">
+                    还没有照片进入相册集。回到访谈页上传老照片后，这里会自动汇总成可滚动浏览的相册。
+                  </p>
+                </div>
+              )}
+            </article>
+          </section>
+
           {Object.entries(groupedMemories).map(([category, categoryMemories]) => (
             <section key={category} className="animate-fade-in">
               <div className="flex items-center gap-3 mb-6">
@@ -1131,8 +1271,8 @@ export function MemoryPage({
                       </div>
                     ) : null}
 
-                    <div className="flex flex-col gap-3 pt-3 border-t border-border/50 md:flex-row md:items-center md:justify-between">
-                      <div className="flex items-center gap-3">
+                    <div className="flex flex-col gap-3 border-t border-border/50 pt-3 md:flex-row md:items-center md:justify-between">
+                      <div className="flex flex-wrap items-center gap-3">
                         {getEmotionIcon(memory.emotion)}
                         {memory.photos.length > 0 ? (
                           <span className="emotion-tag-neutral">{memory.photos.length} 张照片</span>

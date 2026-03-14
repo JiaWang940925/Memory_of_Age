@@ -114,24 +114,24 @@ export function WelcomePage({ onStart }: WelcomePageProps) {
 
   return (
     <>
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12 gradient-soft">
+      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8 sm:px-6 sm:py-12 gradient-soft">
       {/* 主标题区域 */}
-        <div className="text-center mb-12 animate-fade-in">
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full gradient-warm mb-8 shadow-warm-lg">
-            <Heart className="w-12 h-12 text-primary-foreground" />
+        <div className="text-center mb-10 animate-fade-in sm:mb-12">
+          <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full gradient-warm shadow-warm-lg sm:mb-8 sm:h-24 sm:w-24">
+            <Heart className="h-10 w-10 text-primary-foreground sm:h-12 sm:w-12" />
           </div>
 
           <h1 className="text-elder-3xl font-bold mb-4">
             <span className="text-gradient-warm">岁语</span>
           </h1>
 
-          <p className="text-elder-xl text-muted-foreground max-w-md mx-auto leading-relaxed">
+          <p className="mx-auto max-w-[18rem] text-elder-xl leading-relaxed text-muted-foreground sm:max-w-md">
             用温暖的对话，珍藏您的人生故事
           </p>
         </div>
 
         {/* 功能介绍卡片 */}
-        <div className="grid gap-6 mb-8 max-w-2xl w-full">
+        <div className="mb-8 grid w-full max-w-2xl gap-4 sm:gap-6">
           <FeatureCard
             icon={<Sparkles className="w-8 h-8" />}
             title="AI温暖陪伴"
@@ -152,10 +152,10 @@ export function WelcomePage({ onStart }: WelcomePageProps) {
           />
         </div>
 
-        <section className="card-warm max-w-2xl w-full mb-10 animate-slide-up">
-          <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-secondary/15 text-secondary flex items-center justify-center">
-              <ShieldCheck className="w-8 h-8" />
+        <section className="card-warm mb-8 w-full max-w-2xl animate-slide-up sm:mb-10">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-secondary/15 text-secondary sm:h-14 sm:w-14 sm:rounded-2xl">
+              <ShieldCheck className="h-7 w-7 sm:h-8 sm:w-8" />
             </div>
             <div className="space-y-4">
               <div>
@@ -180,12 +180,12 @@ export function WelcomePage({ onStart }: WelcomePageProps) {
         {/* 开始按钮 */}
         <button
           onClick={handleStartClick}
-          className="btn-primary text-elder-xl animate-slide-up"
+          className="btn-primary w-full max-w-sm text-elder-lg animate-slide-up sm:w-auto sm:text-elder-xl"
         >
           开始我的故事
         </button>
 
-        <p className="text-muted-foreground text-elder-sm mt-6 animate-fade-in">
+        <p className="mt-5 text-center text-elder-sm text-muted-foreground animate-fade-in sm:mt-6">
           每一段记忆，都值得被温柔以待
         </p>
       </div>
@@ -251,8 +251,8 @@ interface FeatureCardProps {
 
 function FeatureCard({ icon, title, description, delay }: FeatureCardProps) {
   return (
-    <div className={`card-warm flex items-start gap-4 animate-slide-up ${delay}`}>
-      <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-accent flex items-center justify-center text-primary">
+    <div className={`card-warm flex items-start gap-3 animate-slide-up sm:gap-4 ${delay}`}>
+      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-accent text-primary sm:h-14 sm:w-14">
         {icon}
       </div>
       <div>

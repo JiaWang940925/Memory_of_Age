@@ -710,11 +710,11 @@ export function ChatPage({
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="bg-card border-b border-border px-6 py-4">
-        <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
+      <header className="bg-card border-b border-border px-4 py-3 sm:px-6 sm:py-4">
+        <div className="mx-auto flex max-w-3xl flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-full gradient-warm flex items-center justify-center shadow-warm">
-              <Sparkles className="w-7 h-7 text-primary-foreground" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full gradient-warm shadow-warm sm:h-14 sm:w-14">
+              <Sparkles className="h-6 w-6 text-primary-foreground sm:h-7 sm:w-7" />
             </div>
             <div>
               <h1 className="text-elder-xl font-bold text-foreground">岁语</h1>
@@ -724,7 +724,7 @@ export function ChatPage({
 
           <button
             onClick={() => onNavigate('memory')}
-            className="flex items-center gap-3 px-5 py-3 rounded-xl bg-accent text-foreground hover:bg-accent/80 transition-colors"
+            className="flex w-full items-center justify-center gap-3 rounded-xl bg-accent px-4 py-3 text-foreground transition-colors hover:bg-accent/80 sm:w-auto sm:justify-start sm:px-5"
           >
             <BookOpen className="w-6 h-6" />
             <span className="text-elder-sm">我的回忆录</span>
@@ -737,7 +737,7 @@ export function ChatPage({
         </div>
       </header>
 
-      <div className="bg-accent/50 border-b border-border/70 px-6 py-4">
+      <div className="bg-accent/50 border-b border-border/70 px-4 py-3 sm:px-6 sm:py-4">
         <div className="max-w-3xl mx-auto grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="rounded-3xl bg-card/80 px-5 py-4 shadow-card">
             <p className="text-elder-sm text-muted-foreground">当前用户画像</p>
@@ -767,7 +767,7 @@ export function ChatPage({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
         <div className="max-w-3xl mx-auto space-y-6">
           {messages.map((message) => (
             <div
@@ -784,7 +784,7 @@ export function ChatPage({
                           key={photo.id}
                           src={photo.dataUrl}
                           alt={photo.name}
-                          className="h-32 w-full rounded-2xl object-cover border border-white/30"
+                          className="h-28 w-full rounded-2xl border border-white/30 object-cover sm:h-32"
                         />
                       ))}
                     </div>
@@ -815,7 +815,7 @@ export function ChatPage({
         </div>
       </div>
 
-      <div className="bg-card border-t border-border px-6 py-4">
+      <div className="bg-card border-t border-border px-4 py-3 sm:px-6 sm:py-4">
         <div className="max-w-3xl mx-auto">
           <input
             ref={photoInputRef}
@@ -828,7 +828,7 @@ export function ChatPage({
 
           {(selectedPhotos.length > 0 || isPreparingPhotos) && (
             <div className="mb-4 card-warm space-y-4">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-elder-base font-semibold text-foreground">本条回忆附带照片</p>
                   <p className="text-elder-sm text-muted-foreground">
@@ -879,7 +879,7 @@ export function ChatPage({
             </div>
           )}
 
-          <div className="flex flex-col gap-4 xl:flex-row">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-stretch">
             <textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
@@ -888,22 +888,22 @@ export function ChatPage({
               className="input-warm resize-none xl:flex-1"
               rows={3}
             />
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:flex xl:w-auto">
+            <div className="grid grid-cols-3 gap-3 xl:flex xl:w-auto">
               <button
                 type="button"
                 onClick={openPhotoPicker}
                 disabled={isPreparingPhotos || isTyping || isTranscribing}
-                className="min-h-[5.5rem] rounded-2xl border-2 border-border bg-card px-6 py-4 flex items-center justify-center gap-3 text-elder-lg font-semibold text-foreground shadow-card transition-all duration-300 hover:border-primary hover:shadow-warm disabled:opacity-50 disabled:cursor-not-allowed xl:min-w-[12rem]"
+                className="flex min-h-[4.5rem] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-border bg-card px-2 py-3 text-center text-elder-sm font-semibold text-foreground shadow-card transition-all duration-300 hover:border-primary hover:shadow-warm disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-[5rem] sm:flex-row sm:px-4 sm:text-elder-base xl:min-w-[12rem] xl:gap-3"
               >
                 <ImagePlus className="w-7 h-7 flex-shrink-0" />
-                <span>{isPreparingPhotos ? '整理照片' : '添加照片'}</span>
+                <span className="leading-tight">{isPreparingPhotos ? '整理照片' : '添加照片'}</span>
               </button>
               <button
                 onClick={() => {
                   void handleVoiceInput()
                 }}
                 disabled={!voiceEnabled || isTyping || isTranscribing || isPreparingPhotos}
-                className={`min-h-[5.5rem] rounded-2xl border-2 px-6 py-4 flex items-center justify-center gap-3 text-elder-lg font-semibold transition-all duration-300 xl:min-w-[12rem] ${
+                className={`flex min-h-[4.5rem] flex-col items-center justify-center gap-2 rounded-2xl border-2 px-2 py-3 text-center text-elder-sm font-semibold transition-all duration-300 sm:min-h-[5rem] sm:flex-row sm:px-4 sm:text-elder-base xl:min-w-[12rem] xl:gap-3 ${
                   isListening
                     ? 'border-secondary bg-secondary text-secondary-foreground shadow-warm animate-pulse-soft'
                     : 'border-border bg-card text-foreground shadow-card hover:border-primary hover:shadow-warm'
@@ -916,7 +916,7 @@ export function ChatPage({
                 ) : (
                   <Mic className="w-7 h-7 flex-shrink-0" />
                 )}
-                <span>
+                <span className="leading-tight">
                   {isTranscribing
                     ? '转写中'
                     : isListening
@@ -935,15 +935,16 @@ export function ChatPage({
                   || isTranscribing
                   || isPreparingPhotos
                 }
-                className="btn-primary min-h-[5.5rem] w-full px-0 disabled:opacity-50 disabled:cursor-not-allowed xl:min-w-[6.5rem]"
+                className="btn-primary flex min-h-[4.5rem] w-full flex-col gap-2 px-2 py-3 text-elder-sm disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-[5rem] sm:flex-row sm:px-4 sm:text-elder-base xl:min-w-[7rem]"
                 aria-label="发送消息"
               >
                 <Send className="w-7 h-7" />
+                <span className="leading-tight">发送</span>
               </button>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col items-center justify-center gap-3 text-center sm:flex-row sm:text-left">
+          <div className="mt-4 flex flex-col items-start gap-2 text-left sm:flex-row sm:items-center sm:gap-3">
             <span
               className={`text-elder-base ${
                 isListening || isTranscribing ? 'text-secondary' : 'text-muted-foreground'
@@ -957,7 +958,7 @@ export function ChatPage({
             </span>
             <button
               onClick={handleSwitchTopic}
-              className="text-elder-base text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors"
+              className="flex items-center gap-2 text-elder-base text-muted-foreground transition-colors hover:text-foreground"
             >
               <RefreshCw className="w-5 h-5" />
               换个话题

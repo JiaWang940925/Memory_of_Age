@@ -83,12 +83,12 @@ export function ProfileSetupPage({
   }
 
   return (
-    <div className="min-h-screen px-6 py-10">
-      <div className="mx-auto grid max-w-6xl gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+    <div className="min-h-screen px-4 py-6 sm:px-6 sm:py-10">
+      <div className="mx-auto grid max-w-6xl gap-5 sm:gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <section className="paper-panel space-y-6">
-          <div className="flex items-start gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-primary/10 text-primary">
-              <Sparkles className="h-8 w-8" />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-primary/10 text-primary sm:h-16 sm:w-16 sm:rounded-3xl">
+              <Sparkles className="h-7 w-7 sm:h-8 sm:w-8" />
             </div>
             <div>
               <h1 className="text-elder-2xl font-bold text-foreground">先认识您，再陪您回忆人生</h1>
@@ -99,7 +99,7 @@ export function ProfileSetupPage({
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="grid gap-4 sm:gap-5 md:grid-cols-2">
               <label className="space-y-3">
                 <span className="flex items-center gap-2 text-elder-base font-semibold text-foreground">
                   <UserRound className="h-5 w-5 text-primary" />
@@ -158,7 +158,7 @@ export function ProfileSetupPage({
 
             <fieldset className="space-y-3">
               <legend className="text-elder-base font-semibold text-foreground">性别</legend>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {genderOptions.map((option) => (
                   <button
                     key={option.value}
@@ -186,7 +186,7 @@ export function ProfileSetupPage({
               <p className="text-elder-base text-muted-foreground">
                 后续提问会自动覆盖童年、求学、工作、婚恋、家庭与晚年阶段。
               </p>
-              <button type="submit" className="btn-primary">
+              <button type="submit" className="btn-primary w-full sm:w-auto">
                 进入智能访谈
                 <ArrowRight className="h-6 w-6" />
               </button>
@@ -194,8 +194,8 @@ export function ProfileSetupPage({
           </form>
         </section>
 
-        <section className="space-y-6">
-          <article className="paper-panel space-y-5">
+        <section className="space-y-5 sm:space-y-6">
+          <article className="paper-panel space-y-4 sm:space-y-5">
             <div>
               <p className="text-elder-base font-semibold text-primary">个人信息摘要</p>
               <h2 className="mt-3 text-elder-lg font-semibold text-foreground">
@@ -227,7 +227,7 @@ export function ProfileSetupPage({
             </div>
           </article>
 
-          <article className="paper-panel space-y-5">
+          <article className="paper-panel space-y-4 sm:space-y-5">
             <div>
               <p className="text-elder-base font-semibold text-primary">可能会重点提醒的时代节点</p>
               <p className="mt-2 text-elder-base text-muted-foreground">

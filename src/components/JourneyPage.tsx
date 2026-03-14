@@ -359,8 +359,8 @@ export function JourneyPage({
   if (!journey.scenes.length) {
     return (
       <div className="min-h-screen bg-background">
-        <header className="bg-card/90 border-b border-border px-6 py-4 sticky top-0 z-10 backdrop-blur">
-          <div className="max-w-6xl mx-auto flex items-center gap-4">
+        <header className="sticky top-0 z-10 border-b border-border bg-card/90 px-4 py-3 backdrop-blur sm:px-6 sm:py-4">
+          <div className="mx-auto flex max-w-6xl items-center gap-3 sm:gap-4">
             <button
               onClick={onBack}
               className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center text-foreground hover:bg-accent/80 transition-colors"
@@ -376,7 +376,7 @@ export function JourneyPage({
           </div>
         </header>
 
-        <div className="max-w-5xl mx-auto px-6 py-16">
+        <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-16">
           <div className="paper-panel text-center py-16 px-8">
             <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-accent text-primary">
               <Waypoints className="h-12 w-12" />
@@ -443,9 +443,9 @@ export function JourneyPage({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-card/88 border-b border-border px-6 py-4 sticky top-0 z-10 backdrop-blur">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <header className="sticky top-0 z-10 border-b border-border bg-card/88 px-4 py-3 backdrop-blur sm:px-6 sm:py-4">
+        <div className="mx-auto flex max-w-6xl flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 sm:gap-4">
             <button
               onClick={onBack}
               className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center text-foreground hover:bg-accent/80 transition-colors"
@@ -467,7 +467,7 @@ export function JourneyPage({
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+      <div className="mx-auto max-w-6xl space-y-8 px-4 py-6 sm:px-6 sm:py-8">
         <section className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
           <article className="paper-panel space-y-5">
             <div className="flex items-start gap-4">
@@ -490,7 +490,7 @@ export function JourneyPage({
               </div>
             </div>
 
-            <div className="rounded-[1.75rem] border border-border bg-[linear-gradient(145deg,rgba(193,152,114,0.22),rgba(255,248,239,0.92))] px-6 py-6">
+            <div className="rounded-[1.75rem] border border-border bg-[linear-gradient(145deg,rgba(193,152,114,0.22),rgba(255,248,239,0.92))] px-5 py-5 sm:px-6 sm:py-6">
               <div className="flex items-center gap-2 text-primary">
                 <Sparkles className="h-5 w-5" />
                 <span className="text-elder-base font-semibold">数字人形象建议</span>
@@ -539,7 +539,7 @@ export function JourneyPage({
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
               <div className="rounded-3xl bg-accent/35 px-5 py-5">
                 <p className="text-elder-sm text-muted-foreground">当前主线</p>
                 <p className="mt-2 text-elder-base font-semibold text-foreground">
@@ -604,7 +604,7 @@ export function JourneyPage({
             <div className="text-elder-sm text-muted-foreground">
               节点已改成横向展开。可点击左右按钮，或拖动下方滑杆浏览整张地图。
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex w-full items-center gap-2 sm:gap-3 lg:w-auto">
               <button
                 type="button"
                 onClick={() => nudgeMap('left')}
@@ -877,7 +877,7 @@ export function JourneyPage({
                 </div>
 
                 <div className="rounded-3xl border border-border bg-card px-5 py-5">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <p className="text-elder-base font-semibold text-foreground">本节点历史偶遇</p>
                       <p className="mt-2 text-elder-sm text-muted-foreground">
@@ -892,7 +892,7 @@ export function JourneyPage({
                           id: linkedHistoryNode.id,
                         })
                       }}
-                      className="btn-outline min-h-[3.8rem] px-6 py-3"
+                      className="btn-outline min-h-[3.8rem] px-6 py-3 w-full sm:w-auto"
                     >
                       读取人物故事
                     </button>
@@ -937,7 +937,7 @@ export function JourneyPage({
                         id: activeScene.id,
                       })
                     }}
-                    className="btn-outline mt-4 min-h-[3.8rem] px-6 py-3"
+                    className="btn-outline mt-4 min-h-[3.8rem] px-6 py-3 w-full sm:w-auto"
                   >
                     回到这段回忆
                   </button>
@@ -996,7 +996,7 @@ export function JourneyPage({
                     : 'border-border bg-card'
                 }`}
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="text-elder-base font-semibold text-foreground">{profile.name}</p>
                     <p className="mt-2 text-elder-sm text-muted-foreground">{profile.title}</p>

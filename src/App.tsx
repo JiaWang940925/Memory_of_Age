@@ -272,6 +272,7 @@ function App() {
       {currentPage === 'memory' && (
         <MemoryPage 
           memories={memories}
+          userProfile={userProfile}
           onBack={() => setCurrentPage('chat')}
           onOpenJourney={() => setCurrentPage('journey')}
           generatedAvatar={generatedAvatar}

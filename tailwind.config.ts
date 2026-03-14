@@ -46,12 +46,12 @@ const config: Config = {
         sans: ['var(--font-sans)'],
       },
       fontSize: {
-        'elder-sm': ['1.25rem', { lineHeight: '1.9rem' }],
-        'elder-base': ['1.375rem', { lineHeight: '2.15rem' }],
-        'elder-lg': ['1.625rem', { lineHeight: '2.4rem' }],
-        'elder-xl': ['2rem', { lineHeight: '2.8rem' }],
-        'elder-2xl': ['2.5rem', { lineHeight: '3.2rem' }],
-        'elder-3xl': ['3.25rem', { lineHeight: '3.9rem' }],
+        'elder-sm': ['clamp(0.98rem, 0.93rem + 0.25vw, 1.25rem)', { lineHeight: 'clamp(1.5rem, 1.45rem + 0.35vw, 1.9rem)' }],
+        'elder-base': ['clamp(1.08rem, 1.01rem + 0.42vw, 1.375rem)', { lineHeight: 'clamp(1.72rem, 1.6rem + 0.55vw, 2.15rem)' }],
+        'elder-lg': ['clamp(1.18rem, 1.06rem + 0.72vw, 1.625rem)', { lineHeight: 'clamp(1.85rem, 1.7rem + 0.72vw, 2.4rem)' }],
+        'elder-xl': ['clamp(1.42rem, 1.22rem + 1.05vw, 2rem)', { lineHeight: 'clamp(2.05rem, 1.82rem + 1.25vw, 2.8rem)' }],
+        'elder-2xl': ['clamp(1.78rem, 1.45rem + 1.72vw, 2.5rem)', { lineHeight: 'clamp(2.25rem, 1.95rem + 1.7vw, 3.2rem)' }],
+        'elder-3xl': ['clamp(2.15rem, 1.7rem + 2.25vw, 3.25rem)', { lineHeight: 'clamp(2.6rem, 2.15rem + 2.05vw, 3.9rem)' }],
       },
       animation: {
         'fade-in': 'fadeIn 0.6s ease-out',

@@ -43,8 +43,8 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
-    font-size: 1.375rem;
-    line-height: 1.9;
+    font-size: clamp(1.0625rem, 0.98rem + 0.45vw, 1.375rem);
+    line-height: 1.75;
     background-image:
       radial-gradient(circle at top left, rgba(255, 239, 214, 0.82), transparent 26%),
       radial-gradient(circle at 85% 8%, rgba(206, 223, 209, 0.38), transparent 22%),
@@ -52,6 +52,7 @@
     background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-wrap: break-word;
   }
 
   /* 大字体，方便老年人阅读 */
@@ -410,5 +411,182 @@
 
   .map-legend-dot.history {
     background: rgba(81, 114, 117, 0.88);
+  }
+
+  .photo-album-scroll {
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(171, 133, 101, 0.7) rgba(242, 232, 219, 0.7);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .photo-album-scroll::-webkit-scrollbar {
+    height: 0.65rem;
+  }
+
+  .photo-album-scroll::-webkit-scrollbar-track {
+    border-radius: 9999px;
+    background: rgba(242, 232, 219, 0.72);
+  }
+
+  .photo-album-scroll::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: linear-gradient(90deg, rgba(198, 149, 103, 0.92), rgba(121, 153, 137, 0.92));
+  }
+
+  .photo-album-card {
+    flex: 0 0 18rem;
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 767px) {
+  body {
+    background-attachment: scroll;
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-outline {
+    min-height: 3.75rem;
+    padding: 0.9rem 1.25rem;
+    gap: 0.625rem;
+    border-radius: 1.125rem;
+  }
+
+  .card-warm,
+  .paper-panel {
+    padding: 1rem;
+    border-radius: 1.5rem;
+  }
+
+  .chat-bubble-ai,
+  .chat-bubble-user {
+    max-width: min(100%, 22rem);
+    padding: 1rem;
+    border-radius: 1.5rem;
+  }
+
+  .input-warm {
+    min-height: 7rem;
+    padding: 1rem 1.1rem;
+    border-radius: 1.3rem;
+  }
+
+  .emotion-tag-positive,
+  .emotion-tag-neutral,
+  .emotion-tag-attention {
+    padding: 0.5rem 0.85rem;
+  }
+
+  .sketch-map {
+    min-height: 30rem;
+    border-radius: 1.7rem;
+  }
+
+  .sketch-map-frame,
+  .sketch-map-viewport {
+    border-radius: 1.8rem;
+  }
+
+  .sketch-map-edge {
+    width: 2.5rem;
+  }
+
+  .sketch-route-outline {
+    stroke-width: 18px;
+  }
+
+  .sketch-route-main {
+    stroke-width: 8px;
+  }
+
+  .sketch-route-branch {
+    stroke-width: 4px;
+  }
+
+  .sketch-node {
+    width: 7rem;
+    gap: 0.5rem;
+  }
+
+  .sketch-node-button {
+    height: 4.5rem;
+    width: 4.5rem;
+    border-radius: 1.2rem;
+  }
+
+  .sketch-node-label {
+    padding: 0.625rem 0.75rem;
+    border-radius: 1rem;
+  }
+
+  .map-scroll-button {
+    height: 3.25rem;
+    width: 3.25rem;
+  }
+
+  .map-scroll-slider {
+    min-width: 0;
+    width: 100%;
+    border-radius: 1.25rem;
+    padding: 0.8rem 1rem;
+  }
+
+  .map-legend-chip {
+    gap: 0.5rem;
+    padding: 0.55rem 0.85rem;
+  }
+
+  .photo-album-card {
+    flex-basis: 14.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .btn-primary,
+  .btn-secondary,
+  .btn-outline {
+    min-height: 3.4rem;
+    padding: 0.8rem 1rem;
+  }
+
+  .chat-bubble-ai,
+  .chat-bubble-user {
+    max-width: 100%;
+  }
+
+  .input-warm {
+    min-height: 6.25rem;
+  }
+
+  .sketch-map {
+    min-height: 26rem;
+  }
+
+  .sketch-node {
+    width: 5.75rem;
+  }
+
+  .sketch-node-button {
+    height: 3.85rem;
+    width: 3.85rem;
+  }
+
+  .map-scroll-button {
+    height: 2.75rem;
+    width: 2.75rem;
+  }
+
+  .map-scroll-slider {
+    padding: 0.75rem 0.85rem;
+  }
+
+  .map-scroll-range {
+    height: 0.45rem;
+  }
+
+  .photo-album-card {
+    flex-basis: 12.25rem;
   }
 }
