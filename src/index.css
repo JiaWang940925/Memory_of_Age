@@ -249,6 +249,20 @@
     pointer-events: none;
   }
 
+  .sketch-map::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(180px 90px at 8% 78%, rgba(128, 160, 145, 0.16), transparent 72%),
+      radial-gradient(210px 110px at 20% 84%, rgba(152, 176, 158, 0.18), transparent 74%),
+      radial-gradient(220px 120px at 86% 80%, rgba(182, 156, 120, 0.18), transparent 74%),
+      radial-gradient(160px 80px at 78% 74%, rgba(160, 140, 110, 0.14), transparent 70%),
+      linear-gradient(0deg, rgba(150, 121, 95, 0.06) 0%, rgba(150, 121, 95, 0) 16%);
+    opacity: 0.65;
+    pointer-events: none;
+  }
+
   .sketch-map-frame {
     @apply relative rounded-[2.35rem];
   }
@@ -323,7 +337,7 @@
     color: rgba(123, 79, 52, 0.92);
   }
 
-  .sketch-node-button.history {
+  .sketch-node-button.person {
     border-color: rgba(89, 113, 117, 0.42);
     color: rgba(63, 95, 100, 0.94);
     background-color: rgba(243, 246, 242, 0.96);
@@ -409,7 +423,7 @@
     background: rgba(142, 101, 75, 0.88);
   }
 
-  .map-legend-dot.history {
+  .map-legend-dot.person {
     background: rgba(81, 114, 117, 0.88);
   }
 

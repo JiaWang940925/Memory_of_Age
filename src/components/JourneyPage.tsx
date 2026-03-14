@@ -1,23 +1,18 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowLeft,
   ArrowRight,
   BookOpen,
   Building2,
-  Camera,
   ChevronLeft,
   ChevronRight,
   Compass,
-  Flag,
   HeartHandshake,
-  Landmark,
   MapPinned,
-  Mountain,
   Rocket,
   School,
   ScrollText,
-  Shield,
   Sparkles,
   TrainFront,
   UsersRound,
@@ -25,13 +20,8 @@ import {
   Waypoints,
 } from 'lucide-react'
 import type { GeneratedAvatar, Memory } from '../App'
-import {
-  buildFeaturedHistoricalEncounters,
-  historicalProfiles,
-  type HistoricalProfile,
-} from '../lib/historicalProfiles'
 import { buildJourneyExperience, type JourneyScene } from '../lib/memoryJourney'
-import { buildProfileSummary, getAgeAtYear, type UserProfile } from '../lib/userProfile'
+import { buildProfileSummary, type UserProfile } from '../lib/userProfile'
 
 interface JourneyPageProps {
   memories: Memory[]
@@ -48,17 +38,28 @@ interface MemoryMapNode {
   scene: JourneyScene
 }
 
-interface HistoryMapNode {
+interface PersonProfile {
   id: string
-  kind: 'history'
+  name: string
+  relationLabel: string
+  summary: string
+  encounterPrompt: string
+  sourceSceneId: string
+  sourcePlace: string | null
+  sourceSceneTitle: string
+}
+
+interface PersonMapNode {
+  id: string
+  kind: 'person'
   x: number
   y: number
-  profile: HistoricalProfile
+  profile: PersonProfile
   anchorSceneId: string
 }
 
 interface SelectedMapNode {
-  kind: 'memory' | 'history'
+  kind: 'memory' | 'person'
   id: string
 }
 
@@ -117,28 +118,38 @@ function buildMemoryNodes(
   })
 }
 
-function buildHistoryNodes(
+function buildPersonNodes(
   memoryNodes: MemoryMapNode[],
-  profiles: HistoricalProfile[],
+  profiles: PersonProfile[],
   canvasWidth: number,
-): HistoryMapNode[] {
-  return memoryNodes.map((node, index) => {
-    const profile = profiles[index % profiles.length]
+): PersonMapNode[] {
+  if (!profiles.length) {
+    return []
+  }
+
+  return memoryNodes.flatMap((node, index) => {
+    const relatedProfiles = profiles.filter((item) => item.sourceSceneId === node.id)
+    if (!relatedProfiles.length) {
+      return []
+    }
+
     const x = clamp(
       node.x + (index % 2 === 0 ? -56 : 56),
       152,
       canvasWidth - 152,
     )
-    const y = MAP_HISTORY_ROW_Y[index % MAP_HISTORY_ROW_Y.length]
+    return relatedProfiles.map((profile, profileIndex) => {
+      const y = MAP_HISTORY_ROW_Y[(index + profileIndex) % MAP_HISTORY_ROW_Y.length]
 
-    return {
-      id: `${profile.id}-${node.id}`,
-      kind: 'history',
-      x,
-      y,
-      profile,
-      anchorSceneId: node.id,
-    }
+      return {
+        id: `${profile.id}-${node.id}`,
+        kind: 'person',
+        x: clamp(x + profileIndex * 34, 152, canvasWidth - 152),
+        y,
+        profile,
+        anchorSceneId: node.id,
+      }
+    })
   })
 }
 
@@ -181,51 +192,186 @@ function getSceneIcon(scene: JourneyScene): LucideIcon {
   }
 }
 
-function getHistoricalIcon(profile: HistoricalProfile): LucideIcon {
-  if (profile.eventTitle.includes('抗美援朝')) {
-    return Flag
+function getPersonIcon(profile: PersonProfile): LucideIcon {
+  if (profile.relationLabel.includes('老师')) {
+    return School
   }
 
-  if (profile.eventTitle.includes('慰安妇')) {
-    return Shield
+  if (profile.relationLabel.includes('同事') || profile.relationLabel.includes('领导')) {
+    return Building2
   }
 
-  if (profile.eventTitle.includes('神舟五号') || profile.eventTitle.includes('航天')) {
+  if (profile.relationLabel.includes('朋友') || profile.relationLabel.includes('同学')) {
+    return UsersRound
+  }
+
+  if (profile.relationLabel.includes('航天') || profile.relationLabel.includes('工程')) {
     return Rocket
   }
 
-  if (profile.eventTitle.includes('汶川地震')) {
-    return Mountain
-  }
-
-  if (profile.title.includes('摄影')) {
-    return Camera
-  }
-
-  if (profile.title.includes('记者')) {
-    return ScrollText
-  }
-
-  return Landmark
+  return HeartHandshake
 }
 
-function buildEncounterBasisText(profile: HistoricalProfile, userProfile: UserProfile) {
-  const ageAtEvent = getAgeAtYear(userProfile, profile.eventYear)
-  const parts: string[] = []
+const RELATION_KEYWORDS: Array<{ label: string; keywords: string[] }> = [
+  { label: '父母', keywords: ['父亲', '母亲', '爸爸', '妈妈'] },
+  { label: '长辈', keywords: ['爷爷', '奶奶', '外公', '外婆', '姥爷', '姥姥'] },
+  { label: '兄弟姐妹', keywords: ['哥哥', '姐姐', '弟弟', '妹妹'] },
+  { label: '亲戚', keywords: ['叔叔', '阿姨', '舅舅', '姑姑', '伯伯', '婶婶', '姨妈', '舅妈'] },
+  { label: '伴侣', keywords: ['爱人', '丈夫', '妻子', '对象', '老伴'] },
+  { label: '子女', keywords: ['孩子', '儿子', '女儿', '孙子', '孙女'] },
+  { label: '老师', keywords: ['老师', '班主任', '校长', '同桌'] },
+  { label: '同学', keywords: ['同学'] },
+  { label: '朋友', keywords: ['朋友', '伙伴'] },
+  { label: '同事', keywords: ['同事', '同僚', '工友', '战友'] },
+  { label: '领导', keywords: ['领导', '主任', '经理', '厂长', '队长'] },
+  { label: '邻里', keywords: ['邻居', '街坊', '邻里'] },
+]
 
-  if (ageAtEvent !== null && ageAtEvent >= 0) {
-    parts.push(`${profile.eventYear} 年时您大约 ${ageAtEvent} 岁`)
+const PLACE_SUFFIXES = [
+  '省',
+  '市',
+  '区',
+  '县',
+  '镇',
+  '乡',
+  '村',
+  '街',
+  '路',
+  '巷',
+  '里',
+  '湾',
+  '河',
+  '江',
+  '湖',
+  '海',
+  '山',
+  '桥',
+  '站',
+  '港',
+  '广场',
+  '厂',
+  '校',
+  '院',
+  '馆',
+  '场',
+  '园',
+  '道',
+]
+
+const GENERIC_PLACES = [
+  '学校',
+  '教室',
+  '操场',
+  '车站',
+  '火车站',
+  '医院',
+  '市场',
+  '菜市场',
+  '商店',
+  '工厂',
+  '车间',
+  '码头',
+  '街口',
+  '巷口',
+  '田里',
+  '河边',
+  '江边',
+  '海边',
+  '广场',
+  '公园',
+  '礼堂',
+  '电影院',
+]
+
+function extractPlaceCandidates(text: string) {
+  if (!text) {
+    return []
   }
 
-  if (profile.locationKeywords?.some((keyword) => userProfile.birthPlace.includes(keyword) || userProfile.hometown.includes(keyword))) {
-    parts.push('与您的出生地或成长地有地理关联')
+  const results: Array<{ value: string; index: number }> = []
+  const pattern = new RegExp(`([\\u4e00-\\u9fa5]{2,8}(?:${PLACE_SUFFIXES.join('|')}))`, 'g')
+  let match = pattern.exec(text)
+  while (match) {
+    const value = match[1]
+    if (value && !results.some((item) => item.value === value)) {
+      results.push({ value, index: match.index })
+    }
+    match = pattern.exec(text)
   }
 
-  if (!parts.length) {
-    return '这位人物因其时代代表性被叠加到您的地图中'
+  GENERIC_PLACES.forEach((place) => {
+    const idx = text.indexOf(place)
+    if (idx >= 0 && !results.some((item) => item.value === place)) {
+      results.push({ value: place, index: idx })
+    }
+  })
+
+  return results.sort((left, right) => left.index - right.index).map((item) => item.value)
+}
+
+function extractPersonCandidates(text: string) {
+  if (!text) {
+    return []
   }
 
-  return `系统优先叠加这位人物，因为${parts.join('，')}。`
+  const results: Array<{ name: string; relationLabel: string; index: number }> = []
+  const normalized = text.replace(/\s+/g, '')
+
+  RELATION_KEYWORDS.forEach((group) => {
+    group.keywords.forEach((keyword) => {
+      const idx = normalized.indexOf(keyword)
+      if (idx >= 0 && !results.some((item) => item.name === keyword)) {
+        results.push({ name: keyword, relationLabel: group.label, index: idx })
+      }
+    })
+  })
+
+  const nameRegex = /(张|王|李|赵|刘|陈|杨|黄|周|吴|徐|孙|胡|朱|高|林|何|郭|马|罗|梁|宋|郑|谢|韩|唐|冯|于|董|萧|程|曹|袁|邓|许|傅|沈|曾|彭|吕|苏|卢|蒋|蔡|贾|丁|魏|薛|叶|阎|余|潘|杜|戴|夏|钟|汪|田|任|姜|范|方|石|姚|谭|廖|邱|熊|金|陆|郝|孔|白|崔|康|毛|邵|史|秦|江|顾|段|贺|孟|龙|万|侯|钱)([\\u4e00-\\u9fa5]{1,2})/g
+  let nameMatch = nameRegex.exec(text)
+  while (nameMatch) {
+    const name = `${nameMatch[1]}${nameMatch[2]}`
+    if (!results.some((item) => item.name === name)) {
+      results.push({ name, relationLabel: '重要人物', index: nameMatch.index })
+    }
+    nameMatch = nameRegex.exec(text)
+  }
+
+  return results
+    .sort((left, right) => left.index - right.index)
+    .map((item) => ({ name: item.name, relationLabel: item.relationLabel }))
+}
+
+function pickSentence(text: string, keyword: string) {
+  const pieces = text.split(/[。！？!?]/).map((piece) => piece.trim()).filter(Boolean)
+  const matched = pieces.find((piece) => piece.includes(keyword))
+  return matched ?? pieces[0] ?? ''
+}
+
+function buildMentionedPeople(
+  scenes: JourneyScene[],
+) {
+  return scenes.flatMap((scene) => {
+    const baseText = `${scene.answer} ${scene.question}`.trim()
+    const people = extractPersonCandidates(baseText)
+    const places = extractPlaceCandidates(baseText)
+    const place = places[0] ?? ''
+
+    return people.slice(0, 3).map((person) => {
+      const snippet = pickSentence(baseText, person.name)
+      return {
+        id: `${scene.id}-${person.name}`,
+        name: person.name,
+        relationLabel: person.relationLabel,
+        summary: snippet ? `“${snippet}”` : '来自这段回忆的关键人物。',
+        encounterPrompt: place
+          ? `您在${place}提到了这位${person.relationLabel}，可以继续聊聊吗？`
+          : `您提到了这位${person.relationLabel}，可以继续聊聊吗？`,
+        sourceSceneId: scene.id,
+        sourcePlace: place || null,
+        sourceSceneTitle: scene.title,
+      }
+    })
+  })
 }
 
 function PaperMapNode({
@@ -243,7 +389,7 @@ function PaperMapNode({
   subtitle: string
   x: number
   y: number
-  kind: 'memory' | 'history'
+  kind: 'memory' | 'person'
   onClick: () => void
   icon: LucideIcon
 }) {
@@ -270,25 +416,6 @@ function PaperMapNode({
   )
 }
 
-function SourceLinks({ links }: { links: HistoricalProfile['sourceLinks'] }) {
-  return (
-    <div className="space-y-3">
-      {links.map((link) => (
-        <a
-          key={link.url}
-          href={link.url}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-4 text-left transition-colors hover:bg-accent/50"
-        >
-          <span className="text-elder-base text-foreground">{link.label}</span>
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
-        </a>
-      ))}
-    </div>
-  )
-}
-
 export function JourneyPage({
   memories,
   onBack,
@@ -298,14 +425,11 @@ export function JourneyPage({
   const journey = buildJourneyExperience(memories)
   const mapCanvasWidth = getMapCanvasWidth(journey.scenes.length)
   const memoryNodes = buildMemoryNodes(journey.scenes, mapCanvasWidth)
-  const featuredProfiles = buildFeaturedHistoricalEncounters(
-    userProfile,
-    journey.scenes.map(
-      (scene) => `${scene.category} ${scene.backdrop.label} ${scene.answer} ${scene.question}`,
-    ),
-    Math.max(memoryNodes.length, 4),
+  const mentionedPeople = useMemo(
+    () => buildMentionedPeople(journey.scenes),
+    [journey.scenes],
   )
-  const historyNodes = buildHistoryNodes(memoryNodes, featuredProfiles, mapCanvasWidth)
+  const personNodes = buildPersonNodes(memoryNodes, mentionedPeople, mapCanvasWidth)
   const [selectedNode, setSelectedNode] = useState<SelectedMapNode>({
     kind: 'memory',
     id: memoryNodes[0]?.id ?? '',
@@ -319,11 +443,11 @@ export function JourneyPage({
     const hasSelectedMemory = memoryNodes.some(
       (node) => node.kind === selectedNode.kind && node.id === selectedNode.id,
     )
-    const hasSelectedHistory = historyNodes.some(
+    const hasSelectedPerson = personNodes.some(
       (node) => node.kind === selectedNode.kind && node.id === selectedNode.id,
     )
 
-    if (hasSelectedMemory || hasSelectedHistory) {
+    if (hasSelectedMemory || hasSelectedPerson) {
       return
     }
 
@@ -331,7 +455,7 @@ export function JourneyPage({
       kind: 'memory',
       id: memoryNodes[0]?.id ?? '',
     })
-  }, [historyNodes, memoryNodes, selectedNode])
+  }, [memoryNodes, personNodes, selectedNode])
 
   useEffect(() => {
     const syncMapScrollState = () => {
@@ -383,7 +507,7 @@ export function JourneyPage({
             </div>
             <h2 className="text-elder-xl font-semibold text-foreground">地图还没有节点</h2>
             <p className="mt-4 text-elder-base text-muted-foreground max-w-2xl mx-auto">
-              先记录几段人生故事，平台会自动生成数字人、回忆站点和历史人物偶遇支线。
+              先记录几段人生故事，平台会自动生成数字人、回忆站点和人物关联支线。
             </p>
             <button onClick={onBack} className="btn-primary mt-8">
               返回回忆录
@@ -397,20 +521,28 @@ export function JourneyPage({
   const selectedMemoryNode = selectedNode.kind === 'memory'
     ? memoryNodes.find((node) => node.id === selectedNode.id) ?? memoryNodes[0]
     : null
-  const selectedHistoryNode = selectedNode.kind === 'history'
-    ? historyNodes.find((node) => node.id === selectedNode.id) ?? historyNodes[0]
+  const selectedPersonNode = selectedNode.kind === 'person'
+    ? personNodes.find((node) => node.id === selectedNode.id) ?? personNodes[0]
     : null
-  const selectedHistoryProfile = selectedNode.kind === 'history'
-    ? selectedHistoryNode?.profile ?? historyNodes[0]?.profile ?? historicalProfiles[0]
+  const selectedPersonProfile = selectedNode.kind === 'person'
+    ? selectedPersonNode?.profile ?? personNodes[0]?.profile ?? null
     : null
-  const selectedTargetX = selectedNode.kind === 'history'
-    ? selectedHistoryNode?.x ?? historyNodes[0]?.x ?? 0
+  const selectedTargetX = selectedNode.kind === 'person'
+    ? selectedPersonNode?.x ?? personNodes[0]?.x ?? 0
     : selectedMemoryNode?.x ?? memoryNodes[0]?.x ?? 0
   const activeScene = selectedMemoryNode?.scene
-    ?? memoryNodes.find((node) => node.id === selectedHistoryNode?.anchorSceneId)?.scene
+    ?? memoryNodes.find((node) => node.id === selectedPersonNode?.anchorSceneId)?.scene
     ?? memoryNodes[0].scene
-  const linkedHistoryNode = historyNodes.find((node) => node.anchorSceneId === activeScene.id) ?? historyNodes[0]
+  const linkedPersonNode = personNodes.find((node) => node.anchorSceneId === activeScene.id) ?? personNodes[0]
   const routePath = buildPath(memoryNodes)
+  const placeByScene = useMemo(() => {
+    return new Map(
+      journey.scenes.map((scene) => {
+        const place = extractPlaceCandidates(`${scene.answer} ${scene.question}`)[0] || ''
+        return [scene.id, place]
+      }),
+    )
+  }, [journey.scenes])
 
   useEffect(() => {
     if (mapMaxOffset <= 0 || mapViewportWidth <= 0) {
@@ -455,14 +587,14 @@ export function JourneyPage({
             <div>
               <h1 className="text-elder-xl font-bold text-foreground">平面回忆地图</h1>
               <p className="text-elder-sm text-muted-foreground">
-                用简笔纸面地图浏览人生，也在节点间偶遇历史人物
+                用简笔纸面地图浏览人生，也在节点间遇见您提到的人物
               </p>
             </div>
           </div>
 
           <div className="hidden lg:flex items-center gap-3">
             <span className="emotion-tag-neutral">{journey.scenes.length} 个回忆节点</span>
-            <span className="emotion-tag-positive">{historicalProfiles.length} 位历史人物</span>
+            <span className="emotion-tag-positive">{mentionedPeople.length} 位关联人物</span>
           </div>
         </div>
       </header>
@@ -534,7 +666,7 @@ export function JourneyPage({
               <div>
                 <h2 className="text-elder-lg font-semibold text-foreground">地图玩法</h2>
                 <p className="mt-2 text-elder-base text-muted-foreground">
-                  棕色节点是您的回忆，青灰节点是历史人物偶遇。点击任一节点都能在下方读到故事，并知道它和哪一段人生场景相连。
+                  棕色节点是您的回忆，青灰节点是您提到的人物。点击任一节点都能在下方读到故事，并知道它和哪一段人生场景相连。
                 </p>
               </div>
             </div>
@@ -547,15 +679,15 @@ export function JourneyPage({
                 </p>
               </div>
               <div className="rounded-3xl bg-accent/35 px-5 py-5">
-                <p className="text-elder-sm text-muted-foreground">历史人物库</p>
+                <p className="text-elder-sm text-muted-foreground">人物关联库</p>
                 <p className="mt-2 text-elder-base font-semibold text-foreground">
-                  {historicalProfiles.length} 位代表人物
+                  {mentionedPeople.length} 位关联人物
                 </p>
               </div>
               <div className="rounded-3xl bg-accent/35 px-5 py-5">
                 <p className="text-elder-sm text-muted-foreground">叠加依据</p>
                 <p className="mt-2 text-elder-base font-semibold text-foreground">
-                  出生年代与成长地点
+                  回忆内容中的地点与人物
                 </p>
               </div>
             </div>
@@ -566,7 +698,7 @@ export function JourneyPage({
                 {buildProfileSummary(userProfile)}
               </p>
               <p className="mt-3 text-elder-sm text-muted-foreground">
-                地图中的历史人物会优先匹配您的出生年份、经历年代和地域线索。
+                地图中的人物来自您亲自提到的回忆与故事。
               </p>
             </div>
 
@@ -576,8 +708,8 @@ export function JourneyPage({
                 <span className="text-elder-sm text-foreground">我的回忆节点</span>
               </div>
               <div className="map-legend-chip">
-                <span className="map-legend-dot history" />
-                <span className="text-elder-sm text-foreground">历史人物偶遇节点</span>
+                <span className="map-legend-dot person" />
+                <span className="text-elder-sm text-foreground">关联人物节点</span>
               </div>
             </div>
           </article>
@@ -596,7 +728,9 @@ export function JourneyPage({
             </div>
             <div className="flex flex-wrap gap-3">
               <span className="emotion-tag-neutral">{journey.readinessLabel}</span>
-              <span className="emotion-tag-positive">{activeScene.backdrop.label}</span>
+              <span className="emotion-tag-positive">
+                {placeByScene.get(activeScene.id) || activeScene.backdrop.label}
+              </span>
             </div>
           </div>
 
@@ -666,10 +800,10 @@ export function JourneyPage({
                 >
                   <path d={routePath} className="sketch-route-outline" />
                   <path d={routePath} className="sketch-route-main" />
-                  {historyNodes.map((node) => {
-                    const anchor = memoryNodes.find((item) => item.id === node.anchorSceneId)
-                    if (!anchor) {
-                      return null
+                {personNodes.map((node) => {
+                  const anchor = memoryNodes.find((item) => item.id === node.anchorSceneId)
+                  if (!anchor) {
+                    return null
                     }
 
                     const branch = `M ${anchor.x} ${anchor.y} L ${node.x} ${node.y}`
@@ -681,7 +815,7 @@ export function JourneyPage({
                   <PaperMapNode
                     key={node.id}
                     isActive={selectedNode.kind === 'memory' && selectedNode.id === node.id}
-                    label={node.scene.backdrop.mapLabel}
+                    label={placeByScene.get(node.scene.id) || node.scene.backdrop.mapLabel}
                     subtitle={`第 ${node.scene.index + 1} 站`}
                     x={node.x}
                     y={node.y}
@@ -696,19 +830,19 @@ export function JourneyPage({
                   />
                 ))}
 
-                {historyNodes.map((node) => (
+                {personNodes.map((node) => (
                   <PaperMapNode
                     key={node.id}
-                    isActive={selectedNode.kind === 'history' && selectedNode.id === node.id}
+                    isActive={selectedNode.kind === 'person' && selectedNode.id === node.id}
                     label={node.profile.name}
-                    subtitle="历史偶遇"
+                    subtitle={node.profile.relationLabel}
                     x={node.x}
                     y={node.y}
-                    kind="history"
-                    icon={getHistoricalIcon(node.profile)}
+                    kind="person"
+                    icon={getPersonIcon(node.profile)}
                     onClick={() => {
                       setSelectedNode({
-                        kind: 'history',
+                        kind: 'person',
                         id: node.id,
                       })
                     }}
@@ -767,58 +901,62 @@ export function JourneyPage({
                   <span className="emotion-tag-neutral">{selectedMemoryNode.scene.emotionLabel}</span>
                 </div>
               </>
-            ) : selectedHistoryProfile ? (
+            ) : selectedPersonProfile ? (
               <>
                 <div className="flex items-start gap-4">
                   <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-secondary/15 text-secondary">
                     {(() => {
-                      const Icon = getHistoricalIcon(selectedHistoryProfile)
+                      const Icon = getPersonIcon(selectedPersonProfile)
                       return <Icon className="h-7 w-7" />
                     })()}
                   </div>
                   <div>
                     <h2 className="text-elder-lg font-semibold text-foreground">
-                      {selectedHistoryProfile.name}
+                      {selectedPersonProfile.name}
                     </h2>
                     <p className="mt-2 text-elder-base text-muted-foreground">
-                      {selectedHistoryProfile.title}
+                      {selectedPersonProfile.relationLabel}
                     </p>
                   </div>
                 </div>
 
                 <div className="rounded-3xl bg-accent/35 p-5 space-y-3">
-                  <p className="text-elder-sm text-muted-foreground">历史事件</p>
+                  <p className="text-elder-sm text-muted-foreground">人物线索</p>
                   <p className="text-elder-base font-semibold text-foreground">
-                    {selectedHistoryProfile.eventTitle}
+                    {selectedPersonProfile.relationLabel}
                   </p>
                   <p className="text-elder-base text-muted-foreground">
-                    {selectedHistoryProfile.summary}
+                    {selectedPersonProfile.summary}
                   </p>
                   <p className="text-elder-sm leading-7 text-muted-foreground">
-                    {buildEncounterBasisText(selectedHistoryProfile, userProfile)}
+                    {selectedPersonProfile.encounterPrompt}
                   </p>
                 </div>
 
                 <div className="rounded-3xl border border-border bg-card px-5 py-5">
-                  <p className="text-elder-sm text-muted-foreground">第一人称转述</p>
+                  <p className="text-elder-sm text-muted-foreground">回忆位置</p>
                   <p className="mt-3 text-elder-base leading-relaxed text-foreground">
-                    {selectedHistoryProfile.firstPersonNarrative}
+                    {selectedPersonProfile.sourcePlace
+                      ? `提及地点：${selectedPersonProfile.sourcePlace}`
+                      : '未明确提及具体地点'}
                   </p>
                   <p className="mt-4 text-elder-sm text-muted-foreground leading-7">
-                    {selectedHistoryProfile.perspectiveNote}
+                    来自：{selectedPersonProfile.sourceSceneTitle}
                   </p>
                 </div>
 
                 <div className="rounded-3xl bg-[linear-gradient(145deg,rgba(92,112,116,0.1),rgba(247,245,240,0.96))] px-5 py-5">
-                  <p className="text-elder-sm text-muted-foreground">为什么值得被收入人物库</p>
+                  <p className="text-elder-sm text-muted-foreground">继续追问方向</p>
                   <p className="mt-3 text-elder-base leading-relaxed text-foreground">
-                    {selectedHistoryProfile.significance}
+                    试着从这位人物的性格、共同经历或对您影响的瞬间继续聊聊。
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <span className="emotion-tag-neutral">{selectedHistoryProfile.eraLabel}</span>
-                  <span className="emotion-tag-positive">{selectedHistoryProfile.locationLabel}</span>
+                  <span className="emotion-tag-neutral">{selectedPersonProfile.relationLabel}</span>
+                  {selectedPersonProfile.sourcePlace ? (
+                    <span className="emotion-tag-positive">{selectedPersonProfile.sourcePlace}</span>
+                  ) : null}
                 </div>
               </>
             ) : null}
@@ -834,7 +972,7 @@ export function JourneyPage({
                   <div>
                     <h2 className="text-elder-lg font-semibold text-foreground">节点延展内容</h2>
                     <p className="mt-2 text-elder-base text-muted-foreground">
-                      这一区同时放图片、视频演绎提示，以及本节点可以偶遇到的历史人物。
+                      这一区同时放图片、视频演绎提示，以及本节点可以关联到的人物。
                     </p>
                   </div>
                 </div>
@@ -879,55 +1017,53 @@ export function JourneyPage({
                 <div className="rounded-3xl border border-border bg-card px-5 py-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <p className="text-elder-base font-semibold text-foreground">本节点历史偶遇</p>
-                      <p className="mt-2 text-elder-sm text-muted-foreground">
-                        {linkedHistoryNode.profile.encounterPrompt}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedNode({
-                          kind: 'history',
-                          id: linkedHistoryNode.id,
-                        })
-                      }}
-                      className="btn-outline min-h-[3.8rem] px-6 py-3 w-full sm:w-auto"
-                    >
-                      读取人物故事
-                    </button>
-                  </div>
-                  <div className="mt-4 rounded-2xl bg-accent/35 px-4 py-4">
-                    <p className="text-elder-base font-semibold text-foreground">
-                      {linkedHistoryNode.profile.name}
-                    </p>
-                    <p className="mt-2 text-elder-base text-muted-foreground">
-                      {linkedHistoryNode.profile.title}
-                    </p>
-                  </div>
+                  <p className="text-elder-base font-semibold text-foreground">本节点关联人物</p>
+                  <p className="mt-2 text-elder-sm text-muted-foreground">
+                    {linkedPersonNode?.profile.encounterPrompt ?? '这段回忆里没有提到具体人物'}
+                  </p>
                 </div>
-              </>
-            ) : selectedHistoryProfile ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedNode({
+                      kind: 'person',
+                      id: linkedPersonNode?.id ?? '',
+                    })
+                  }}
+                  className="btn-outline min-h-[3.8rem] px-6 py-3 w-full sm:w-auto"
+                  disabled={!linkedPersonNode}
+                >
+                  读取人物故事
+                </button>
+              </div>
+              <div className="mt-4 rounded-2xl bg-accent/35 px-4 py-4">
+                <p className="text-elder-base font-semibold text-foreground">
+                  {linkedPersonNode?.profile.name ?? '暂未提到人物'}
+                </p>
+                <p className="mt-2 text-elder-base text-muted-foreground">
+                  {linkedPersonNode?.profile.relationLabel ?? '可以再补充人物故事'}
+                </p>
+              </div>
+            </div>
+          </>
+            ) : selectedPersonProfile ? (
               <>
                 <div className="flex items-start gap-4">
                   <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                    <Landmark className="h-7 w-7" />
+                    <UsersRound className="h-7 w-7" />
                   </div>
                   <div>
                     <h2 className="text-elder-lg font-semibold text-foreground">人物来源与地图关系</h2>
                     <p className="mt-2 text-elder-base text-muted-foreground">
-                      这里显示这个历史人物被安排到哪一个回忆站点旁边，以及可继续阅读的公开资料。
+                      这里显示这个人物与哪一段回忆相连，方便继续补充故事。
                     </p>
                   </div>
                 </div>
 
                 <div className="rounded-3xl bg-accent/30 px-5 py-5">
-                  <p className="text-elder-base font-semibold text-foreground">本次偶遇连接的回忆节点</p>
+                  <p className="text-elder-base font-semibold text-foreground">本次关联的回忆节点</p>
                   <p className="mt-3 text-elder-base text-muted-foreground leading-relaxed">
-                    {activeScene.title}。系统将这位历史人物安排在此站旁边，目的是让个人回忆与时代记忆在同一张地图里并置阅读。
-                  </p>
-                  <p className="mt-4 text-elder-sm text-muted-foreground leading-7">
-                    {buildEncounterBasisText(selectedHistoryProfile, userProfile)}
+                    {activeScene.title}。系统将您提到的人物安排在此站旁边，目的是让故事与人物关系同步展开阅读。
                   </p>
                   <button
                     type="button"
@@ -943,17 +1079,10 @@ export function JourneyPage({
                   </button>
                 </div>
 
-                <div className="rounded-3xl border border-border bg-card px-5 py-5">
-                  <p className="text-elder-base font-semibold text-foreground">公开资料来源</p>
-                  <div className="mt-4">
-                    <SourceLinks links={selectedHistoryProfile.sourceLinks} />
-                  </div>
-                </div>
-
                 <div className="rounded-3xl border border-dashed border-border bg-[linear-gradient(145deg,rgba(200,186,166,0.18),rgba(255,251,245,0.94))] px-5 py-5">
                   <p className="text-elder-base font-semibold text-foreground">节点说明</p>
                   <p className="mt-3 text-elder-base leading-relaxed text-muted-foreground">
-                    这类历史节点采用“根据公开资料整理的第一人称转述”方式，只作为阅读和理解时代处境的入口，不替代原始口述档案。
+                    这些人物来自您自己的回忆文本，后续可继续补充更多故事与细节。
                   </p>
                 </div>
               </>
@@ -965,49 +1094,56 @@ export function JourneyPage({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="flex items-center gap-2 text-primary">
-                <Landmark className="h-5 w-5" />
-                <span className="text-elder-base font-semibold">历史人物画像数据库</span>
+                <UsersRound className="h-5 w-5" />
+                <span className="text-elder-base font-semibold">人物提及清单</span>
               </div>
               <h2 className="mt-3 text-elder-lg font-semibold text-foreground">
-                一期样本库已覆盖战争记忆、开国见证、航天突破与地震重建
+                这些人物都来自您的回忆，可以继续补充他们的故事
               </h2>
             </div>
             <span className="emotion-tag-neutral">
-              共 {historicalProfiles.length} 位代表人物，可继续扩展
+              共 {mentionedPeople.length} 位人物
             </span>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            {historicalProfiles.map((profile) => (
-              <button
-                key={profile.id}
-                type="button"
-                    onClick={() => {
-                      const historyNodeId =
-                        historyNodes.find((node) => node.profile.id === profile.id)?.id ?? ''
-                      setSelectedNode({
-                        kind: 'history',
-                        id: historyNodeId,
-                      })
-                    }}
-                className={`w-full rounded-[1.75rem] border px-5 py-5 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-warm ${
-                  selectedNode.kind === 'history' && selectedNode.id === profile.id
-                    ? 'border-primary bg-primary/8'
-                    : 'border-border bg-card'
-                }`}
-              >
+            {mentionedPeople.map((profile) => {
+              const personNodeId =
+                personNodes.find((node) => node.profile.id === profile.id)?.id ?? ''
+              const isActive =
+                selectedNode.kind === 'person' && personNodeId && selectedNode.id === personNodeId
+
+              return (
+                <button
+                  key={profile.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedNode({
+                      kind: 'person',
+                      id: personNodeId,
+                    })
+                  }}
+                  className={`w-full rounded-[1.75rem] border px-5 py-5 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-warm ${
+                    isActive ? 'border-primary bg-primary/8' : 'border-border bg-card'
+                  }`}
+                >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="text-elder-base font-semibold text-foreground">{profile.name}</p>
-                    <p className="mt-2 text-elder-sm text-muted-foreground">{profile.title}</p>
+                    <p className="mt-2 text-elder-sm text-muted-foreground">
+                      {profile.relationLabel}
+                    </p>
                   </div>
-                  <span className="emotion-tag-neutral">{profile.eraLabel}</span>
+                  <span className="emotion-tag-neutral">
+                    {profile.sourcePlace ?? '未标注地点'}
+                  </span>
                 </div>
                 <p className="mt-4 text-elder-base text-muted-foreground leading-relaxed">
                   {profile.summary}
                 </p>
-              </button>
-            ))}
+                </button>
+              )
+            })}
           </div>
         </section>
       </div>
