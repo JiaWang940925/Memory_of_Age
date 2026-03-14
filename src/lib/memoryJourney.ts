@@ -25,25 +25,25 @@ export interface JourneyScene {
   heroPhoto: PhotoAttachment | null
   photos: PhotoAttachment[]
   imageDescription: string
-  videoPrompt: string
-  narrationPrompt: string
+  memoryPrompt: string
+  conversationPrompt: string
   question: string
   answer: string
 }
 
-export interface DigitalAvatarProfile {
+export interface JourneyGuideProfile {
   name: string
   title: string
   intro: string
-  appearance: string
-  auraTags: string[]
+  focus: string
+  tags: string[]
 }
 
 export interface JourneyExperience {
   title: string
   subtitle: string
   readinessLabel: string
-  avatar: DigitalAvatarProfile
+  guide: JourneyGuideProfile
   scenes: JourneyScene[]
   totalPhotoCount: number
   totalCategories: number
@@ -211,16 +211,16 @@ function buildSceneTitle(memory: Memory, backdrop: JourneyBackdrop, index: numbe
   return `${backdrop.mapLabel} · 第 ${index + 1} 站`
 }
 
-function createVideoPrompt(memory: Memory, backdrop: JourneyBackdrop) {
+function createMemoryPrompt(memory: Memory, backdrop: JourneyBackdrop) {
   const answerSnippet = shortenText(memory.answer, 56)
-  return `镜头从${backdrop.mapLabel}的远景缓慢推进，数字人边走边讲：“${answerSnippet}”，画面里保留${backdrop.description}`
+  return `先从“${backdrop.mapLabel}”这个空间线索回想，再顺着“${answerSnippet}”去补充当时的人、声音和物件。`
 }
 
-function createNarrationPrompt(memory: Memory, backdrop: JourneyBackdrop) {
-  return `请用温和、缓慢的语气讲述这一幕，重点突出${backdrop.label}的空间感，以及“${shortenText(memory.answer, 36)}”带来的情绪余味。`
+function createConversationPrompt(memory: Memory, backdrop: JourneyBackdrop) {
+  return `继续追问时，可以围绕${backdrop.label}的空间气味，以及“${shortenText(memory.answer, 36)}”背后的前因后果慢慢展开。`
 }
 
-function buildAvatar(memories: Memory[], scenes: JourneyScene[], totalPhotoCount: number): DigitalAvatarProfile {
+function buildGuide(memories: Memory[], scenes: JourneyScene[], totalPhotoCount: number): JourneyGuideProfile {
   const backdropFrequency = new Map<string, number>()
   const categoryFrequency = new Map<string, number>()
   const emotionFrequency = new Map<string, number>()
@@ -244,22 +244,22 @@ function buildAvatar(memories: Memory[], scenes: JourneyScene[], totalPhotoCount
   const dominantBackdrop =
     backdropTemplates.find((template) => template.id === dominantBackdropId) ?? backdropTemplates[0]
 
-  const emotionTitle =
+  const focusLabel =
     dominantEmotion === 'positive'
-      ? '温暖讲述者'
+      ? '先从温暖片段切入'
       : dominantEmotion === 'attention'
-        ? '坚韧回望者'
-        : '岁月收藏家'
+        ? '先从人生转折切入'
+        : '先从日常细节切入'
 
   return {
-    name: '岁语数字人',
-    title: `${dominantBackdrop.label}的${emotionTitle}`,
-    intro: `已从 ${memories.length} 段回忆里提炼出一位可以在地图中陪伴家人重走人生的讲述者，主线集中在“${dominantCategory}”。`,
-    appearance: `建议形象为银发、温和眼神、带有${dominantBackdrop.label}色调的衣着，让数字人一出场就和回忆里的空间气味连在一起。`,
-    auraTags: [
+    name: '岁语记忆引路卡',
+    title: `${dominantBackdrop.label}里的${focusLabel}`,
+    intro: `已从 ${memories.length} 段回忆里整理出一条地图主线，当前最适合先打开的话题是“${dominantCategory}”。`,
+    focus: `阅读这张地图时，优先回看${dominantBackdrop.label}相关的生活场景，再把时代大事件叠加进来，更容易想起当年的气味、声音和人物。`,
+    tags: [
       dominantBackdrop.mapLabel,
       `${memories.length} 段人生场景`,
-      totalPhotoCount > 0 ? `${totalPhotoCount} 张老照片已融入地图` : '可继续补充老照片',
+      totalPhotoCount > 0 ? `${totalPhotoCount} 张老照片已汇入地图` : '可继续补充老照片',
     ],
   }
 }
@@ -290,8 +290,8 @@ export function buildJourneyExperience(memories: Memory[]): JourneyExperience {
       imageDescription: heroPhoto
         ? '已使用用户上传的老照片作为场景回看素材'
         : `建议补充一张带有“${backdrop.mapLabel}”气质的照片，强化回忆代入感`,
-      videoPrompt: createVideoPrompt(memory, backdrop),
-      narrationPrompt: createNarrationPrompt(memory, backdrop),
+      memoryPrompt: createMemoryPrompt(memory, backdrop),
+      conversationPrompt: createConversationPrompt(memory, backdrop),
       question: memory.question,
       answer: memory.answer,
     }
@@ -302,7 +302,7 @@ export function buildJourneyExperience(memories: Memory[]): JourneyExperience {
     0,
   )
 
-  const avatar = buildAvatar(memories, scenes, totalPhotoCount)
+  const guide = buildGuide(memories, scenes, totalPhotoCount)
   const journeyTitle =
     scenes.length > 0
       ? `沿着 ${scenes.length} 个场景，重走人生地图`
@@ -312,13 +312,13 @@ export function buildJourneyExperience(memories: Memory[]): JourneyExperience {
     title: journeyTitle,
     subtitle:
       scenes.length > 0
-        ? '系统会把每段回忆转成一个可行走的站点，用数字人、场景背景和多媒体内容把故事重新排布。'
-        : '先记录几段重要回忆，地图平台才有足够内容来生成数字人和场景。',
+        ? '系统会把每段回忆转成一个可行走的站点，再配上时代大事线索，帮助家人一起回看人生。'
+        : '先记录几段重要回忆，地图才有足够内容来整理主线与时代线索。',
     readinessLabel:
       scenes.length >= 4
-        ? '回忆录已具备沉浸式地图浏览条件'
+        ? '回忆录已具备完整地图浏览条件'
         : '建议至少累积 4 段回忆，地图会更完整',
-    avatar,
+    guide,
     scenes,
     totalPhotoCount,
     totalCategories: new Set(memories.map((memory) => memory.category)).size,

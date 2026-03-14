@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowLeft,
@@ -8,8 +8,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Compass,
+  Flag,
   HeartHandshake,
+  Home,
+  Landmark,
   MapPinned,
+  Mountain,
   Rocket,
   School,
   ScrollText,
@@ -19,15 +23,27 @@ import {
   Waves,
   Waypoints,
 } from 'lucide-react'
-import type { GeneratedAvatar, Memory } from '../App'
+import type { Memory } from '../App'
+import {
+  buildFeaturedHistoricalEvents,
+  getHistoricalEventFit,
+  historicalEvents,
+  type HistoricalEvent,
+} from '../lib/historicalEvents'
+import {
+  buildImportantPeople,
+  buildImportantPeopleBySceneId,
+  extractPlaceCandidates,
+  type ImportantPerson,
+} from '../lib/peopleMentions'
 import { buildJourneyExperience, type JourneyScene } from '../lib/memoryJourney'
 import { buildProfileSummary, type UserProfile } from '../lib/userProfile'
 
 interface JourneyPageProps {
   memories: Memory[]
   onBack: () => void
+  onGoHome: () => void
   userProfile: UserProfile
-  generatedAvatar: GeneratedAvatar | null
 }
 
 interface MemoryMapNode {
@@ -38,15 +54,13 @@ interface MemoryMapNode {
   scene: JourneyScene
 }
 
-interface PersonProfile {
+interface HistoryMapNode {
   id: string
-  name: string
-  relationLabel: string
-  summary: string
-  encounterPrompt: string
-  sourceSceneId: string
-  sourcePlace: string | null
-  sourceSceneTitle: string
+  kind: 'history'
+  x: number
+  y: number
+  event: HistoricalEvent
+  anchorSceneId: string
 }
 
 interface PersonMapNode {
@@ -54,20 +68,22 @@ interface PersonMapNode {
   kind: 'person'
   x: number
   y: number
-  profile: PersonProfile
+  person: ImportantPerson
   anchorSceneId: string
 }
 
 interface SelectedMapNode {
-  kind: 'memory' | 'person'
+  kind: 'memory' | 'history' | 'person'
   id: string
 }
 
-const MAP_CANVAS_HEIGHT = 640
+const MAP_CANVAS_HEIGHT = 740
 const MAP_NODE_SPACING = 250
 const MAP_SIDE_PADDING = 220
 const MAP_HISTORY_ROW_Y = [186, 224, 172, 212]
 const MAP_MEMORY_ROW_Y = [430, 372, 452, 394, 438]
+const MAP_PERSON_ROW_Y = [564, 606, 542, 588]
+const PERSON_NODE_OFFSETS = [-118, 118, -168, 168]
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -104,52 +120,78 @@ function buildMemoryNodes(
     ]
   }
 
-  return scenes.map((scene, index) => {
-    const x = MAP_SIDE_PADDING + index * MAP_NODE_SPACING
-    const y = MAP_MEMORY_ROW_Y[index % MAP_MEMORY_ROW_Y.length]
+  return scenes.map((scene, index) => ({
+    id: scene.id,
+    kind: 'memory',
+    x: MAP_SIDE_PADDING + index * MAP_NODE_SPACING,
+    y: MAP_MEMORY_ROW_Y[index % MAP_MEMORY_ROW_Y.length],
+    scene,
+  }))
+}
+
+function buildHistoryNodes(
+  memoryNodes: MemoryMapNode[],
+  events: HistoricalEvent[],
+  canvasWidth: number,
+): HistoryMapNode[] {
+  if (!events.length) {
+    return []
+  }
+
+  return memoryNodes.map((node, index) => {
+    const event = events[index % events.length]
+    const x = clamp(
+      node.x + (index % 2 === 0 ? -56 : 56),
+      152,
+      canvasWidth - 152,
+    )
+    const y = MAP_HISTORY_ROW_Y[index % MAP_HISTORY_ROW_Y.length]
 
     return {
-      id: scene.id,
-      kind: 'memory',
+      id: `${event.id}-${node.id}`,
+      kind: 'history',
       x,
       y,
-      scene,
+      event,
+      anchorSceneId: node.id,
     }
   })
 }
 
 function buildPersonNodes(
   memoryNodes: MemoryMapNode[],
-  profiles: PersonProfile[],
+  people: ImportantPerson[],
   canvasWidth: number,
 ): PersonMapNode[] {
-  if (!profiles.length) {
+  if (!people.length || !memoryNodes.length) {
     return []
   }
 
-  return memoryNodes.flatMap((node, index) => {
-    const relatedProfiles = profiles.filter((item) => item.sourceSceneId === node.id)
-    if (!relatedProfiles.length) {
-      return []
-    }
+  const anchorCounts = new Map<string, number>()
+
+  return people.map((person, index) => {
+    const anchorNode =
+      memoryNodes.find((node) => node.id === person.anchorMemoryId)
+      ?? memoryNodes.find((node) => person.relatedSceneIds.includes(node.id))
+      ?? memoryNodes[index % memoryNodes.length]
+    const slot = anchorCounts.get(anchorNode.id) ?? 0
+    anchorCounts.set(anchorNode.id, slot + 1)
 
     const x = clamp(
-      node.x + (index % 2 === 0 ? -56 : 56),
-      152,
-      canvasWidth - 152,
+      anchorNode.x + PERSON_NODE_OFFSETS[slot % PERSON_NODE_OFFSETS.length],
+      168,
+      canvasWidth - 168,
     )
-    return relatedProfiles.map((profile, profileIndex) => {
-      const y = MAP_HISTORY_ROW_Y[(index + profileIndex) % MAP_HISTORY_ROW_Y.length]
+    const y = MAP_PERSON_ROW_Y[(index + slot) % MAP_PERSON_ROW_Y.length] + Math.min(slot, 2) * 8
 
-      return {
-        id: `${profile.id}-${node.id}`,
-        kind: 'person',
-        x: clamp(x + profileIndex * 34, 152, canvasWidth - 152),
-        y,
-        profile,
-        anchorSceneId: node.id,
-      }
-    })
+    return {
+      id: `${person.id}-${anchorNode.id}`,
+      kind: 'person',
+      x,
+      y,
+      person,
+      anchorSceneId: anchorNode.id,
+    }
   })
 }
 
@@ -192,186 +234,45 @@ function getSceneIcon(scene: JourneyScene): LucideIcon {
   }
 }
 
-function getPersonIcon(profile: PersonProfile): LucideIcon {
-  if (profile.relationLabel.includes('老师')) {
-    return School
+function getHistoricalIcon(event: HistoricalEvent): LucideIcon {
+  if (event.title.includes('抗美援朝')) {
+    return Flag
   }
 
-  if (profile.relationLabel.includes('同事') || profile.relationLabel.includes('领导')) {
-    return Building2
+  if (event.title.includes('原子弹')) {
+    return Sparkles
   }
 
-  if (profile.relationLabel.includes('朋友') || profile.relationLabel.includes('同学')) {
-    return UsersRound
-  }
-
-  if (profile.relationLabel.includes('航天') || profile.relationLabel.includes('工程')) {
+  if (event.title.includes('神舟') || event.title.includes('航天')) {
     return Rocket
   }
 
-  return HeartHandshake
-}
-
-const RELATION_KEYWORDS: Array<{ label: string; keywords: string[] }> = [
-  { label: '父母', keywords: ['父亲', '母亲', '爸爸', '妈妈'] },
-  { label: '长辈', keywords: ['爷爷', '奶奶', '外公', '外婆', '姥爷', '姥姥'] },
-  { label: '兄弟姐妹', keywords: ['哥哥', '姐姐', '弟弟', '妹妹'] },
-  { label: '亲戚', keywords: ['叔叔', '阿姨', '舅舅', '姑姑', '伯伯', '婶婶', '姨妈', '舅妈'] },
-  { label: '伴侣', keywords: ['爱人', '丈夫', '妻子', '对象', '老伴'] },
-  { label: '子女', keywords: ['孩子', '儿子', '女儿', '孙子', '孙女'] },
-  { label: '老师', keywords: ['老师', '班主任', '校长', '同桌'] },
-  { label: '同学', keywords: ['同学'] },
-  { label: '朋友', keywords: ['朋友', '伙伴'] },
-  { label: '同事', keywords: ['同事', '同僚', '工友', '战友'] },
-  { label: '领导', keywords: ['领导', '主任', '经理', '厂长', '队长'] },
-  { label: '邻里', keywords: ['邻居', '街坊', '邻里'] },
-]
-
-const PLACE_SUFFIXES = [
-  '省',
-  '市',
-  '区',
-  '县',
-  '镇',
-  '乡',
-  '村',
-  '街',
-  '路',
-  '巷',
-  '里',
-  '湾',
-  '河',
-  '江',
-  '湖',
-  '海',
-  '山',
-  '桥',
-  '站',
-  '港',
-  '广场',
-  '厂',
-  '校',
-  '院',
-  '馆',
-  '场',
-  '园',
-  '道',
-]
-
-const GENERIC_PLACES = [
-  '学校',
-  '教室',
-  '操场',
-  '车站',
-  '火车站',
-  '医院',
-  '市场',
-  '菜市场',
-  '商店',
-  '工厂',
-  '车间',
-  '码头',
-  '街口',
-  '巷口',
-  '田里',
-  '河边',
-  '江边',
-  '海边',
-  '广场',
-  '公园',
-  '礼堂',
-  '电影院',
-]
-
-function extractPlaceCandidates(text: string) {
-  if (!text) {
-    return []
+  if (event.title.includes('地震')) {
+    return Mountain
   }
 
-  const results: Array<{ value: string; index: number }> = []
-  const pattern = new RegExp(`([\\u4e00-\\u9fa5]{2,8}(?:${PLACE_SUFFIXES.join('|')}))`, 'g')
-  let match = pattern.exec(text)
-  while (match) {
-    const value = match[1]
-    if (value && !results.some((item) => item.value === value)) {
-      results.push({ value, index: match.index })
-    }
-    match = pattern.exec(text)
+  if (event.title.includes('高考')) {
+    return ScrollText
   }
 
-  GENERIC_PLACES.forEach((place) => {
-    const idx = text.indexOf(place)
-    if (idx >= 0 && !results.some((item) => item.value === place)) {
-      results.push({ value: place, index: idx })
-    }
-  })
-
-  return results.sort((left, right) => left.index - right.index).map((item) => item.value)
+  return Landmark
 }
 
-function extractPersonCandidates(text: string) {
-  if (!text) {
-    return []
+function getPersonIcon(person: ImportantPerson): LucideIcon {
+  switch (person.theme) {
+    case 'family':
+      return HeartHandshake
+    case 'work':
+      return Building2
+    case 'study':
+      return School
+    default:
+      return UsersRound
   }
-
-  const results: Array<{ name: string; relationLabel: string; index: number }> = []
-  const normalized = text.replace(/\s+/g, '')
-
-  RELATION_KEYWORDS.forEach((group) => {
-    group.keywords.forEach((keyword) => {
-      const idx = normalized.indexOf(keyword)
-      if (idx >= 0 && !results.some((item) => item.name === keyword)) {
-        results.push({ name: keyword, relationLabel: group.label, index: idx })
-      }
-    })
-  })
-
-  const nameRegex = /(张|王|李|赵|刘|陈|杨|黄|周|吴|徐|孙|胡|朱|高|林|何|郭|马|罗|梁|宋|郑|谢|韩|唐|冯|于|董|萧|程|曹|袁|邓|许|傅|沈|曾|彭|吕|苏|卢|蒋|蔡|贾|丁|魏|薛|叶|阎|余|潘|杜|戴|夏|钟|汪|田|任|姜|范|方|石|姚|谭|廖|邱|熊|金|陆|郝|孔|白|崔|康|毛|邵|史|秦|江|顾|段|贺|孟|龙|万|侯|钱)([\\u4e00-\\u9fa5]{1,2})/g
-  let nameMatch = nameRegex.exec(text)
-  while (nameMatch) {
-    const name = `${nameMatch[1]}${nameMatch[2]}`
-    if (!results.some((item) => item.name === name)) {
-      results.push({ name, relationLabel: '重要人物', index: nameMatch.index })
-    }
-    nameMatch = nameRegex.exec(text)
-  }
-
-  return results
-    .sort((left, right) => left.index - right.index)
-    .map((item) => ({ name: item.name, relationLabel: item.relationLabel }))
 }
 
-function pickSentence(text: string, keyword: string) {
-  const pieces = text.split(/[。！？!?]/).map((piece) => piece.trim()).filter(Boolean)
-  const matched = pieces.find((piece) => piece.includes(keyword))
-  return matched ?? pieces[0] ?? ''
-}
-
-function buildMentionedPeople(
-  scenes: JourneyScene[],
-) {
-  return scenes.flatMap((scene) => {
-    const baseText = `${scene.answer} ${scene.question}`.trim()
-    const people = extractPersonCandidates(baseText)
-    const places = extractPlaceCandidates(baseText)
-    const place = places[0] ?? ''
-
-    return people.slice(0, 3).map((person) => {
-      const snippet = pickSentence(baseText, person.name)
-      return {
-        id: `${scene.id}-${person.name}`,
-        name: person.name,
-        relationLabel: person.relationLabel,
-        summary: snippet ? `“${snippet}”` : '来自这段回忆的关键人物。',
-        encounterPrompt: place
-          ? `您在${place}提到了这位${person.relationLabel}，可以继续聊聊吗？`
-          : `您提到了这位${person.relationLabel}，可以继续聊聊吗？`,
-        sourceSceneId: scene.id,
-        sourcePlace: place || null,
-        sourceSceneTitle: scene.title,
-      }
-    })
-  })
+function buildEventBasisText(event: HistoricalEvent, userProfile: UserProfile) {
+  return getHistoricalEventFit(event, userProfile).reasonText
 }
 
 function PaperMapNode({
@@ -389,7 +290,7 @@ function PaperMapNode({
   subtitle: string
   x: number
   y: number
-  kind: 'memory' | 'person'
+  kind: 'memory' | 'history' | 'person'
   onClick: () => void
   icon: LucideIcon
 }) {
@@ -419,17 +320,30 @@ function PaperMapNode({
 export function JourneyPage({
   memories,
   onBack,
+  onGoHome,
   userProfile,
-  generatedAvatar,
 }: JourneyPageProps) {
   const journey = buildJourneyExperience(memories)
   const mapCanvasWidth = getMapCanvasWidth(journey.scenes.length)
   const memoryNodes = buildMemoryNodes(journey.scenes, mapCanvasWidth)
-  const mentionedPeople = useMemo(
-    () => buildMentionedPeople(journey.scenes),
-    [journey.scenes],
+  const featuredEvents = buildFeaturedHistoricalEvents(
+    userProfile,
+    journey.scenes.map(
+      (scene) => `${scene.category} ${scene.backdrop.label} ${scene.answer} ${scene.question}`,
+    ),
+    Math.max(memoryNodes.length, 4),
   )
-  const personNodes = buildPersonNodes(memoryNodes, mentionedPeople, mapCanvasWidth)
+  const historyNodes = buildHistoryNodes(memoryNodes, featuredEvents, mapCanvasWidth)
+  const allImportantPeople = buildImportantPeople(memories)
+  const featuredPeople = allImportantPeople.slice(0, Math.max(4, Math.min(memoryNodes.length + 2, 8)))
+  const personNodes = buildPersonNodes(memoryNodes, featuredPeople, mapCanvasWidth)
+  const peopleBySceneId = buildImportantPeopleBySceneId(featuredPeople)
+  const placeBySceneId = Object.fromEntries(
+    journey.scenes.map((scene) => [
+      scene.id,
+      extractPlaceCandidates(`${scene.answer} ${scene.question}`)[0] ?? '',
+    ]),
+  ) as Record<string, string>
   const [selectedNode, setSelectedNode] = useState<SelectedMapNode>({
     kind: 'memory',
     id: memoryNodes[0]?.id ?? '',
@@ -443,11 +357,14 @@ export function JourneyPage({
     const hasSelectedMemory = memoryNodes.some(
       (node) => node.kind === selectedNode.kind && node.id === selectedNode.id,
     )
+    const hasSelectedHistory = historyNodes.some(
+      (node) => node.kind === selectedNode.kind && node.id === selectedNode.id,
+    )
     const hasSelectedPerson = personNodes.some(
       (node) => node.kind === selectedNode.kind && node.id === selectedNode.id,
     )
 
-    if (hasSelectedMemory || hasSelectedPerson) {
+    if (hasSelectedMemory || hasSelectedHistory || hasSelectedPerson) {
       return
     }
 
@@ -455,7 +372,7 @@ export function JourneyPage({
       kind: 'memory',
       id: memoryNodes[0]?.id ?? '',
     })
-  }, [memoryNodes, personNodes, selectedNode])
+  }, [historyNodes, memoryNodes, personNodes, selectedNode])
 
   useEffect(() => {
     const syncMapScrollState = () => {
@@ -484,19 +401,26 @@ export function JourneyPage({
     return (
       <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-10 border-b border-border bg-card/90 px-4 py-3 backdrop-blur sm:px-6 sm:py-4">
-          <div className="mx-auto flex max-w-6xl items-center gap-3 sm:gap-4">
-            <button
-              onClick={onBack}
-              className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center text-foreground hover:bg-accent/80 transition-colors"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <div>
-              <h1 className="text-elder-xl font-bold text-foreground">平面回忆地图</h1>
-              <p className="text-elder-sm text-muted-foreground">
-                需要先积累一些回忆，地图才能展开
-              </p>
+          <div className="mx-auto flex max-w-6xl flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <button
+                onClick={onBack}
+                className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center text-foreground hover:bg-accent/80 transition-colors"
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+              <div>
+                <h1 className="text-elder-xl font-bold text-foreground">平面回忆地图</h1>
+                <p className="text-elder-sm text-muted-foreground">
+                  需要先积累一些回忆，地图才能展开
+                </p>
+              </div>
             </div>
+
+            <button onClick={onGoHome} className="btn-outline w-full justify-center sm:w-auto">
+              <Home className="h-5 w-5" />
+              返回主页
+            </button>
           </div>
         </header>
 
@@ -507,7 +431,7 @@ export function JourneyPage({
             </div>
             <h2 className="text-elder-xl font-semibold text-foreground">地图还没有节点</h2>
             <p className="mt-4 text-elder-base text-muted-foreground max-w-2xl mx-auto">
-              先记录几段人生故事，平台会自动生成数字人、回忆站点和人物关联支线。
+              先记录几段人生故事，平台会自动生成回忆站点、时代大事线索，以及与这些故事相关的人物节点。
             </p>
             <button onClick={onBack} className="btn-primary mt-8">
               返回回忆录
@@ -521,28 +445,33 @@ export function JourneyPage({
   const selectedMemoryNode = selectedNode.kind === 'memory'
     ? memoryNodes.find((node) => node.id === selectedNode.id) ?? memoryNodes[0]
     : null
+  const selectedHistoryNode = selectedNode.kind === 'history'
+    ? historyNodes.find((node) => node.id === selectedNode.id) ?? historyNodes[0]
+    : null
   const selectedPersonNode = selectedNode.kind === 'person'
     ? personNodes.find((node) => node.id === selectedNode.id) ?? personNodes[0]
     : null
-  const selectedPersonProfile = selectedNode.kind === 'person'
-    ? selectedPersonNode?.profile ?? personNodes[0]?.profile ?? null
+  const selectedHistoryEvent = selectedNode.kind === 'history'
+    ? selectedHistoryNode?.event ?? historyNodes[0]?.event ?? historicalEvents[0]
     : null
-  const selectedTargetX = selectedNode.kind === 'person'
-    ? selectedPersonNode?.x ?? personNodes[0]?.x ?? 0
-    : selectedMemoryNode?.x ?? memoryNodes[0]?.x ?? 0
+  const selectedPerson = selectedNode.kind === 'person'
+    ? selectedPersonNode?.person ?? personNodes[0]?.person ?? featuredPeople[0]
+    : null
+  const selectedPersonId = selectedPersonNode?.person.id ?? selectedPerson?.id ?? ''
+  const selectedTargetX = selectedNode.kind === 'history'
+    ? selectedHistoryNode?.x ?? historyNodes[0]?.x ?? 0
+    : selectedNode.kind === 'person'
+      ? selectedPersonNode?.x ?? personNodes[0]?.x ?? 0
+      : selectedMemoryNode?.x ?? memoryNodes[0]?.x ?? 0
   const activeScene = selectedMemoryNode?.scene
+    ?? memoryNodes.find((node) => node.id === selectedHistoryNode?.anchorSceneId)?.scene
     ?? memoryNodes.find((node) => node.id === selectedPersonNode?.anchorSceneId)?.scene
     ?? memoryNodes[0].scene
-  const linkedPersonNode = personNodes.find((node) => node.anchorSceneId === activeScene.id) ?? personNodes[0]
+  const linkedHistoryNode =
+    historyNodes.find((node) => node.anchorSceneId === activeScene.id) ?? historyNodes[0]
+  const scenePeople = peopleBySceneId[activeScene.id] ?? []
+  const activeScenePlace = placeBySceneId[activeScene.id] || ''
   const routePath = buildPath(memoryNodes)
-  const placeByScene = useMemo(() => {
-    return new Map(
-      journey.scenes.map((scene) => {
-        const place = extractPlaceCandidates(`${scene.answer} ${scene.question}`)[0] || ''
-        return [scene.id, place]
-      }),
-    )
-  }, [journey.scenes])
 
   useEffect(() => {
     if (mapMaxOffset <= 0 || mapViewportWidth <= 0) {
@@ -569,6 +498,7 @@ export function JourneyPage({
       clamp(previous + (direction === 'left' ? -420 : 420), 0, mapMaxOffset),
     )
   }
+
   const handleMapSliderChange = (event: ChangeEvent<HTMLInputElement>) => {
     setMapOffsetX(Number(event.target.value))
   }
@@ -587,14 +517,21 @@ export function JourneyPage({
             <div>
               <h1 className="text-elder-xl font-bold text-foreground">平面回忆地图</h1>
               <p className="text-elder-sm text-muted-foreground">
-                用简笔纸面地图浏览人生，也在节点间遇见您提到的人物
+                用简笔纸面地图浏览人生，也用时代大事和重要人物唤醒记忆
               </p>
             </div>
           </div>
 
-          <div className="hidden lg:flex items-center gap-3">
-            <span className="emotion-tag-neutral">{journey.scenes.length} 个回忆节点</span>
-            <span className="emotion-tag-positive">{mentionedPeople.length} 位关联人物</span>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+            <button onClick={onGoHome} className="btn-outline w-full justify-center sm:w-auto">
+              <Home className="h-5 w-5" />
+              返回主页
+            </button>
+            <div className="hidden lg:flex items-center gap-3">
+              <span className="emotion-tag-neutral">{journey.scenes.length} 个回忆节点</span>
+              <span className="emotion-tag-positive">{featuredEvents.length} 条时代线索</span>
+              <span className="emotion-tag-neutral">{featuredPeople.length} 位重要人物</span>
+            </div>
           </div>
         </div>
       </header>
@@ -608,16 +545,14 @@ export function JourneyPage({
               </div>
               <div>
                 <div className="flex flex-wrap gap-3">
-                  <span className={generatedAvatar ? 'emotion-tag-positive' : 'emotion-tag-neutral'}>
-                    {generatedAvatar ? '数字人视频已接入' : '可继续生成数字人视频'}
-                  </span>
-                  <span className="emotion-tag-neutral">{journey.avatar.title}</span>
+                  <span className="emotion-tag-positive">{journey.readinessLabel}</span>
+                  <span className="emotion-tag-neutral">{journey.guide.name}</span>
                 </div>
                 <h2 className="mt-3 text-elder-lg font-semibold text-foreground">
-                  {journey.avatar.name}
+                  {journey.guide.title}
                 </h2>
                 <p className="mt-2 text-elder-base text-muted-foreground">
-                  {journey.avatar.intro}
+                  {journey.guide.intro}
                 </p>
               </div>
             </div>
@@ -625,36 +560,19 @@ export function JourneyPage({
             <div className="rounded-[1.75rem] border border-border bg-[linear-gradient(145deg,rgba(193,152,114,0.22),rgba(255,248,239,0.92))] px-5 py-5 sm:px-6 sm:py-6">
               <div className="flex items-center gap-2 text-primary">
                 <Sparkles className="h-5 w-5" />
-                <span className="text-elder-base font-semibold">数字人形象建议</span>
+                <span className="text-elder-base font-semibold">地图阅读建议</span>
               </div>
               <p className="mt-3 text-elder-base leading-relaxed text-foreground">
-                {journey.avatar.appearance}
+                {journey.guide.focus}
               </p>
             </div>
 
-            {generatedAvatar ? (
-              <div className="rounded-[1.75rem] border border-border bg-card/92 px-5 py-5">
-                <p className="text-elder-base font-semibold text-foreground">SadTalker 数字人预览</p>
-                <video
-                  controls
-                  src={generatedAvatar.videoUrl}
-                  className="mt-4 w-full rounded-3xl bg-black aspect-video"
-                />
-                <p className="mt-3 text-elder-sm text-muted-foreground">
-                  最近一次生成时间：{new Date(generatedAvatar.createdAt).toLocaleString('zh-CN')}
-                </p>
-              </div>
-            ) : null}
-
             <div className="flex flex-wrap gap-3">
-              {journey.avatar.auraTags.map((tag) => (
+              {journey.guide.tags.map((tag) => (
                 <span key={tag} className="emotion-tag-neutral">
                   {tag}
                 </span>
               ))}
-              {generatedAvatar ? (
-                <span className="emotion-tag-positive">已同步到地图平台</span>
-              ) : null}
             </div>
           </article>
 
@@ -666,7 +584,7 @@ export function JourneyPage({
               <div>
                 <h2 className="text-elder-lg font-semibold text-foreground">地图玩法</h2>
                 <p className="mt-2 text-elder-base text-muted-foreground">
-                  棕色节点是您的回忆，青灰节点是您提到的人物。点击任一节点都能在下方读到故事，并知道它和哪一段人生场景相连。
+                  棕色节点是您的回忆，若回忆里提到了具体地点会优先显示地点名；青灰节点是时代大事线索，暖红节点是回忆里反复出现的重要人物。点击任一节点，都能看到它和哪一段人生场景相连。
                 </p>
               </div>
             </div>
@@ -679,15 +597,15 @@ export function JourneyPage({
                 </p>
               </div>
               <div className="rounded-3xl bg-accent/35 px-5 py-5">
-                <p className="text-elder-sm text-muted-foreground">人物关联库</p>
+                <p className="text-elder-sm text-muted-foreground">时代线索</p>
                 <p className="mt-2 text-elder-base font-semibold text-foreground">
-                  {mentionedPeople.length} 位关联人物
+                  {featuredEvents.length} 条
                 </p>
               </div>
               <div className="rounded-3xl bg-accent/35 px-5 py-5">
-                <p className="text-elder-sm text-muted-foreground">叠加依据</p>
+                <p className="text-elder-sm text-muted-foreground">重要人物</p>
                 <p className="mt-2 text-elder-base font-semibold text-foreground">
-                  回忆内容中的地点与人物
+                  {featuredPeople.length} 位
                 </p>
               </div>
             </div>
@@ -698,7 +616,7 @@ export function JourneyPage({
                 {buildProfileSummary(userProfile)}
               </p>
               <p className="mt-3 text-elder-sm text-muted-foreground">
-                地图中的人物来自您亲自提到的回忆与故事。
+                地图中的时代线索会优先匹配您的出生年份和成长地，重要人物则从您已经讲出的回忆里自动抽取。
               </p>
             </div>
 
@@ -708,8 +626,12 @@ export function JourneyPage({
                 <span className="text-elder-sm text-foreground">我的回忆节点</span>
               </div>
               <div className="map-legend-chip">
+                <span className="map-legend-dot history" />
+                <span className="text-elder-sm text-foreground">时代大事节点</span>
+              </div>
+              <div className="map-legend-chip">
                 <span className="map-legend-dot person" />
-                <span className="text-elder-sm text-foreground">关联人物节点</span>
+                <span className="text-elder-sm text-foreground">重要人物节点</span>
               </div>
             </div>
           </article>
@@ -723,13 +645,13 @@ export function JourneyPage({
                 <span className="text-elder-base font-semibold">平面简笔画地图</span>
               </div>
               <h2 className="mt-3 text-elder-lg font-semibold text-foreground">
-                回忆主线与历史偶遇支线在同一张纸面地图里展开
+                回忆主线、时代线索与重要人物在同一张纸面地图里展开
               </h2>
             </div>
             <div className="flex flex-wrap gap-3">
               <span className="emotion-tag-neutral">{journey.readinessLabel}</span>
               <span className="emotion-tag-positive">
-                {placeByScene.get(activeScene.id) || activeScene.backdrop.label}
+                {activeScenePlace || activeScene.backdrop.label}
               </span>
             </div>
           </div>
@@ -800,14 +722,23 @@ export function JourneyPage({
                 >
                   <path d={routePath} className="sketch-route-outline" />
                   <path d={routePath} className="sketch-route-main" />
-                {personNodes.map((node) => {
-                  const anchor = memoryNodes.find((item) => item.id === node.anchorSceneId)
-                  if (!anchor) {
-                    return null
+                  {historyNodes.map((node) => {
+                    const anchor = memoryNodes.find((item) => item.id === node.anchorSceneId)
+                    if (!anchor) {
+                      return null
                     }
 
                     const branch = `M ${anchor.x} ${anchor.y} L ${node.x} ${node.y}`
                     return <path key={node.id} d={branch} className="sketch-route-branch" />
+                  })}
+                  {personNodes.map((node) => {
+                    const anchor = memoryNodes.find((item) => item.id === node.anchorSceneId)
+                    if (!anchor) {
+                      return null
+                    }
+
+                    const branch = `M ${anchor.x} ${anchor.y} L ${node.x} ${node.y}`
+                    return <path key={node.id} d={branch} className="sketch-route-person" />
                   })}
                 </svg>
 
@@ -815,7 +746,7 @@ export function JourneyPage({
                   <PaperMapNode
                     key={node.id}
                     isActive={selectedNode.kind === 'memory' && selectedNode.id === node.id}
-                    label={placeByScene.get(node.scene.id) || node.scene.backdrop.mapLabel}
+                    label={placeBySceneId[node.scene.id] || node.scene.backdrop.mapLabel}
                     subtitle={`第 ${node.scene.index + 1} 站`}
                     x={node.x}
                     y={node.y}
@@ -830,16 +761,35 @@ export function JourneyPage({
                   />
                 ))}
 
+                {historyNodes.map((node) => (
+                  <PaperMapNode
+                    key={node.id}
+                    isActive={selectedNode.kind === 'history' && selectedNode.id === node.id}
+                    label={node.event.shortTitle}
+                    subtitle={`${node.event.eventYear} 年`}
+                    x={node.x}
+                    y={node.y}
+                    kind="history"
+                    icon={getHistoricalIcon(node.event)}
+                    onClick={() => {
+                      setSelectedNode({
+                        kind: 'history',
+                        id: node.id,
+                      })
+                    }}
+                  />
+                ))}
+
                 {personNodes.map((node) => (
                   <PaperMapNode
                     key={node.id}
                     isActive={selectedNode.kind === 'person' && selectedNode.id === node.id}
-                    label={node.profile.name}
-                    subtitle={node.profile.relationLabel}
+                    label={node.person.displayName}
+                    subtitle={node.person.groupLabel}
                     x={node.x}
                     y={node.y}
                     kind="person"
-                    icon={getPersonIcon(node.profile)}
+                    icon={getPersonIcon(node.person)}
                     onClick={() => {
                       setSelectedNode({
                         kind: 'person',
@@ -888,75 +838,122 @@ export function JourneyPage({
                 <div className="rounded-3xl bg-[linear-gradient(145deg,rgba(136,114,90,0.14),rgba(255,249,242,0.95))] px-5 py-5">
                   <div className="flex items-center gap-2 text-primary">
                     <UsersRound className="h-5 w-5" />
-                    <span className="text-elder-base font-semibold">数字人讲述建议</span>
+                    <span className="text-elder-base font-semibold">当时可先这样回想</span>
                   </div>
                   <p className="mt-3 text-elder-base leading-relaxed text-foreground">
-                    “{selectedMemoryNode.scene.quote}”适合由数字人以缓慢、亲近的语调讲出来，让家人进入这段场景。
+                    先从“{selectedMemoryNode.scene.quote}”这句话入手，再想当时在场的人、听见的声音，以及最清楚的一件小物件。
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
                   <span className="emotion-tag-neutral">{selectedMemoryNode.scene.category}</span>
                   <span className="emotion-tag-positive">{selectedMemoryNode.scene.timeLabel}</span>
+                  {activeScenePlace ? (
+                    <span className="emotion-tag-positive">{activeScenePlace}</span>
+                  ) : null}
                   <span className="emotion-tag-neutral">{selectedMemoryNode.scene.emotionLabel}</span>
                 </div>
               </>
-            ) : selectedPersonProfile ? (
+            ) : selectedNode.kind === 'history' && selectedHistoryEvent ? (
               <>
                 <div className="flex items-start gap-4">
                   <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-secondary/15 text-secondary">
                     {(() => {
-                      const Icon = getPersonIcon(selectedPersonProfile)
+                      const Icon = getHistoricalIcon(selectedHistoryEvent)
                       return <Icon className="h-7 w-7" />
                     })()}
                   </div>
                   <div>
                     <h2 className="text-elder-lg font-semibold text-foreground">
-                      {selectedPersonProfile.name}
+                      {selectedHistoryEvent.title}
                     </h2>
                     <p className="mt-2 text-elder-base text-muted-foreground">
-                      {selectedPersonProfile.relationLabel}
+                      {selectedHistoryEvent.locationLabel}
                     </p>
                   </div>
                 </div>
 
                 <div className="rounded-3xl bg-accent/35 p-5 space-y-3">
-                  <p className="text-elder-sm text-muted-foreground">人物线索</p>
+                  <p className="text-elder-sm text-muted-foreground">时代提醒</p>
                   <p className="text-elder-base font-semibold text-foreground">
-                    {selectedPersonProfile.relationLabel}
+                    {selectedHistoryEvent.summary}
                   </p>
                   <p className="text-elder-base text-muted-foreground">
-                    {selectedPersonProfile.summary}
+                    {selectedHistoryEvent.memoryCue}
                   </p>
                   <p className="text-elder-sm leading-7 text-muted-foreground">
-                    {selectedPersonProfile.encounterPrompt}
+                    {buildEventBasisText(selectedHistoryEvent, userProfile)}
                   </p>
                 </div>
 
                 <div className="rounded-3xl border border-border bg-card px-5 py-5">
-                  <p className="text-elder-sm text-muted-foreground">回忆位置</p>
+                  <p className="text-elder-sm text-muted-foreground">帮您继续想起什么</p>
                   <p className="mt-3 text-elder-base leading-relaxed text-foreground">
-                    {selectedPersonProfile.sourcePlace
-                      ? `提及地点：${selectedPersonProfile.sourcePlace}`
-                      : '未明确提及具体地点'}
-                  </p>
-                  <p className="mt-4 text-elder-sm text-muted-foreground leading-7">
-                    来自：{selectedPersonProfile.sourceSceneTitle}
+                    {selectedHistoryEvent.memoryPrompt}
                   </p>
                 </div>
 
                 <div className="rounded-3xl bg-[linear-gradient(145deg,rgba(92,112,116,0.1),rgba(247,245,240,0.96))] px-5 py-5">
-                  <p className="text-elder-sm text-muted-foreground">继续追问方向</p>
+                  <p className="text-elder-sm text-muted-foreground">为什么值得放进地图</p>
                   <p className="mt-3 text-elder-base leading-relaxed text-foreground">
-                    试着从这位人物的性格、共同经历或对您影响的瞬间继续聊聊。
+                    {selectedHistoryEvent.significance}
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <span className="emotion-tag-neutral">{selectedPersonProfile.relationLabel}</span>
-                  {selectedPersonProfile.sourcePlace ? (
-                    <span className="emotion-tag-positive">{selectedPersonProfile.sourcePlace}</span>
-                  ) : null}
+                  <span className="emotion-tag-neutral">{selectedHistoryEvent.eraLabel}</span>
+                  <span className="emotion-tag-positive">
+                    {selectedHistoryEvent.eventYear} 年
+                  </span>
+                </div>
+              </>
+            ) : selectedPerson ? (
+              <>
+                <div className="flex items-start gap-4">
+                  <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-[rgba(170,110,92,0.12)] text-[rgba(138,80,62,0.95)]">
+                    {(() => {
+                      const Icon = getPersonIcon(selectedPerson)
+                      return <Icon className="h-7 w-7" />
+                    })()}
+                  </div>
+                  <div>
+                    <h2 className="text-elder-lg font-semibold text-foreground">
+                      {selectedPerson.displayName}
+                    </h2>
+                    <p className="mt-2 text-elder-base text-muted-foreground">
+                      {selectedPerson.groupLabel} · 在 {selectedPerson.memoryCount} 段回忆里出现过
+                    </p>
+                  </div>
+                </div>
+
+                {selectedPerson.photo ? (
+                  <div className="rounded-3xl border border-border bg-card px-5 py-5">
+                    <p className="text-elder-sm text-muted-foreground">相关照片</p>
+                    <img
+                      src={selectedPerson.photo.dataUrl}
+                      alt={selectedPerson.displayName}
+                      className="mt-4 h-64 w-full rounded-3xl object-cover"
+                    />
+                    <p className="mt-3 text-elder-sm text-muted-foreground">
+                      这张照片来自相关回忆中的上传图片，可作为人物线索参考。
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="rounded-3xl bg-accent/35 p-5 space-y-3">
+                  <p className="text-elder-sm text-muted-foreground">人物摘要</p>
+                  <p className="text-elder-base text-foreground">{selectedPerson.summary}</p>
+                  <p className="text-elder-sm leading-7 text-muted-foreground">
+                    {selectedPerson.detailPrompt}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  {selectedPerson.clueTags.map((tag) => (
+                    <span key={tag} className="emotion-tag-neutral">
+                      {tag}
+                    </span>
+                  ))}
                 </div>
               </>
             ) : null}
@@ -972,7 +969,7 @@ export function JourneyPage({
                   <div>
                     <h2 className="text-elder-lg font-semibold text-foreground">节点延展内容</h2>
                     <p className="mt-2 text-elder-base text-muted-foreground">
-                      这一区同时放图片、视频演绎提示，以及本节点可以关联到的人物。
+                      这一区会把图片、回想提示、时代线索和相关人物放在一起。
                     </p>
                   </div>
                 </div>
@@ -1005,65 +1002,128 @@ export function JourneyPage({
                 </div>
 
                 <div className="rounded-3xl bg-accent/30 px-5 py-5">
-                  <p className="text-elder-base font-semibold text-foreground">视频演绎提示</p>
+                  <p className="text-elder-base font-semibold text-foreground">回想提示</p>
                   <p className="mt-3 text-elder-base leading-relaxed text-muted-foreground">
-                    {selectedMemoryNode.scene.videoPrompt}
+                    {selectedMemoryNode.scene.memoryPrompt}
                   </p>
                   <p className="mt-4 text-elder-sm text-muted-foreground">
-                    旁白建议：{selectedMemoryNode.scene.narrationPrompt}
+                    继续追问建议：{selectedMemoryNode.scene.conversationPrompt}
                   </p>
                 </div>
+
+                {linkedHistoryNode ? (
+                  <div className="rounded-3xl border border-border bg-card px-5 py-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-elder-base font-semibold text-foreground">本节点时代线索</p>
+                        <p className="mt-2 text-elder-sm text-muted-foreground">
+                          {linkedHistoryNode.event.memoryCue}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedNode({
+                            kind: 'history',
+                            id: linkedHistoryNode.id,
+                          })
+                        }}
+                        className="btn-outline min-h-[3.8rem] px-6 py-3 w-full sm:w-auto"
+                      >
+                        查看时代线索
+                      </button>
+                    </div>
+                    <div className="mt-4 rounded-2xl bg-accent/35 px-4 py-4">
+                      <p className="text-elder-base font-semibold text-foreground">
+                        {linkedHistoryNode.event.title}
+                      </p>
+                      <p className="mt-2 text-elder-base text-muted-foreground">
+                        {linkedHistoryNode.event.memoryPrompt}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="rounded-3xl border border-border bg-card px-5 py-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                  <p className="text-elder-base font-semibold text-foreground">本节点关联人物</p>
-                  <p className="mt-2 text-elder-sm text-muted-foreground">
-                    {linkedPersonNode?.profile.encounterPrompt ?? '这段回忆里没有提到具体人物'}
-                  </p>
+                      <p className="text-elder-base font-semibold text-foreground">本节点相关人物</p>
+                      <p className="mt-2 text-elder-sm text-muted-foreground">
+                        系统会把这段回忆里反复出现、对您重要的人物单独标出来。
+                      </p>
+                    </div>
+                  </div>
+                  {scenePeople.length > 0 ? (
+                    <div className="mt-4 grid gap-3">
+                      {scenePeople.slice(0, 3).map((person) => (
+                        <div key={person.id} className="rounded-2xl bg-accent/35 px-4 py-4">
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="flex gap-3">
+                              {person.photo ? (
+                                <img
+                                  src={person.photo.dataUrl}
+                                  alt={person.displayName}
+                                  className="h-16 w-16 rounded-2xl object-cover border border-border"
+                                />
+                              ) : null}
+                              <div>
+                                <p className="text-elder-base font-semibold text-foreground">
+                                  {person.displayName}
+                                </p>
+                                <p className="mt-1 text-elder-sm text-muted-foreground">
+                                  {person.groupLabel}
+                                </p>
+                                <p className="mt-2 text-elder-sm text-foreground">
+                                  {person.summary}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const personNodeId =
+                                  personNodes.find((node) => node.person.id === person.id)?.id ?? ''
+                                setSelectedNode({
+                                  kind: 'person',
+                                  id: personNodeId,
+                                })
+                              }}
+                              className="btn-outline min-h-[3.3rem] px-5 py-2 w-full sm:w-auto"
+                            >
+                              查看人物信息
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-elder-base text-muted-foreground">
+                      这段回忆里暂时还没有识别出足够明确的人物线索。继续多讲几句称呼、关系或一起发生的事情，人物节点会更完整。
+                    </p>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedNode({
-                      kind: 'person',
-                      id: linkedPersonNode?.id ?? '',
-                    })
-                  }}
-                  className="btn-outline min-h-[3.8rem] px-6 py-3 w-full sm:w-auto"
-                  disabled={!linkedPersonNode}
-                >
-                  读取人物故事
-                </button>
-              </div>
-              <div className="mt-4 rounded-2xl bg-accent/35 px-4 py-4">
-                <p className="text-elder-base font-semibold text-foreground">
-                  {linkedPersonNode?.profile.name ?? '暂未提到人物'}
-                </p>
-                <p className="mt-2 text-elder-base text-muted-foreground">
-                  {linkedPersonNode?.profile.relationLabel ?? '可以再补充人物故事'}
-                </p>
-              </div>
-            </div>
-          </>
-            ) : selectedPersonProfile ? (
+              </>
+            ) : selectedNode.kind === 'history' && selectedHistoryEvent ? (
               <>
                 <div className="flex items-start gap-4">
                   <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                    <UsersRound className="h-7 w-7" />
+                    <Landmark className="h-7 w-7" />
                   </div>
                   <div>
-                    <h2 className="text-elder-lg font-semibold text-foreground">人物来源与地图关系</h2>
+                    <h2 className="text-elder-lg font-semibold text-foreground">事件与地图关系</h2>
                     <p className="mt-2 text-elder-base text-muted-foreground">
-                      这里显示这个人物与哪一段回忆相连，方便继续补充故事。
+                      这里显示这条时代线索被安排到哪一个回忆站点旁边，以及它适合帮助您继续回想哪些细节。
                     </p>
                   </div>
                 </div>
 
                 <div className="rounded-3xl bg-accent/30 px-5 py-5">
-                  <p className="text-elder-base font-semibold text-foreground">本次关联的回忆节点</p>
+                  <p className="text-elder-base font-semibold text-foreground">本次连接的回忆节点</p>
                   <p className="mt-3 text-elder-base text-muted-foreground leading-relaxed">
-                    {activeScene.title}。系统将您提到的人物安排在此站旁边，目的是让故事与人物关系同步展开阅读。
+                    {activeScene.title}。系统将这条时代线索安排在此站旁边，目的是让个人回忆与时代记忆在同一张地图里并置阅读。
+                  </p>
+                  <p className="mt-4 text-elder-sm text-muted-foreground leading-7">
+                    {buildEventBasisText(selectedHistoryEvent, userProfile)}
                   </p>
                   <button
                     type="button"
@@ -1079,68 +1139,197 @@ export function JourneyPage({
                   </button>
                 </div>
 
-                <div className="rounded-3xl border border-dashed border-border bg-[linear-gradient(145deg,rgba(200,186,166,0.18),rgba(255,251,245,0.94))] px-5 py-5">
-                  <p className="text-elder-base font-semibold text-foreground">节点说明</p>
-                  <p className="mt-3 text-elder-base leading-relaxed text-muted-foreground">
-                    这些人物来自您自己的回忆文本，后续可继续补充更多故事与细节。
+                <div className="rounded-3xl border border-border bg-card px-5 py-5">
+                  <p className="text-elder-base font-semibold text-foreground">继续追问这件大事</p>
+                  <div className="mt-4 grid gap-3">
+                    {selectedHistoryEvent.rememberingQuestions.map((question) => (
+                      <div key={question} className="rounded-2xl bg-accent/30 px-4 py-4">
+                        <p className="text-elder-base text-foreground">{question}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : selectedPerson ? (
+              <>
+                <div className="flex items-start gap-4">
+                  <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <UsersRound className="h-7 w-7" />
+                  </div>
+                  <div>
+                    <h2 className="text-elder-lg font-semibold text-foreground">人物与地图关系</h2>
+                    <p className="mt-2 text-elder-base text-muted-foreground">
+                      这里显示这位人物被安排到哪些回忆节点旁边，以及哪几段内容让系统认为他对您很重要。
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl bg-accent/30 px-5 py-5">
+                  <p className="text-elder-base font-semibold text-foreground">为什么会被标记出来</p>
+                  <p className="mt-3 text-elder-base text-muted-foreground leading-relaxed">
+                    {selectedPerson.summary}
                   </p>
+                  <p className="mt-4 text-elder-sm text-muted-foreground leading-7">
+                    {selectedPerson.detailPrompt}
+                  </p>
+                </div>
+
+                <div className="rounded-3xl border border-border bg-card px-5 py-5">
+                  <p className="text-elder-base font-semibold text-foreground">相关回忆节点</p>
+                  <div className="mt-4 grid gap-3">
+                    {selectedPerson.scenes.map((scene) => (
+                      <div key={`${selectedPerson.id}-${scene.memoryId}`} className="rounded-2xl bg-accent/30 px-4 py-4">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-2">
+                            <p className="text-elder-base font-semibold text-foreground">
+                              {scene.category}
+                            </p>
+                            <p className="text-elder-sm text-muted-foreground">
+                              {new Date(scene.timestamp).toLocaleDateString('zh-CN')}
+                            </p>
+                            <p className="text-elder-base text-foreground leading-relaxed">
+                              {scene.excerpt}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedNode({
+                                kind: 'memory',
+                                id: scene.memoryId,
+                              })
+                            }}
+                            className="btn-outline min-h-[3.3rem] px-5 py-2 w-full sm:w-auto"
+                          >
+                            回到这段回忆
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </>
             ) : null}
           </article>
         </section>
 
-        <section className="paper-panel space-y-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-primary">
-                <UsersRound className="h-5 w-5" />
-                <span className="text-elder-base font-semibold">人物提及清单</span>
+        {featuredPeople.length > 0 ? (
+          <section className="paper-panel space-y-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-primary">
+                  <UsersRound className="h-5 w-5" />
+                  <span className="text-elder-base font-semibold">重要人物关系卡</span>
+                </div>
+                <h2 className="mt-3 text-elder-lg font-semibold text-foreground">
+                  这些人物是系统从您的回忆内容里自动识别出来的高频关键人物
+                </h2>
               </div>
-              <h2 className="mt-3 text-elder-lg font-semibold text-foreground">
-                这些人物都来自您的回忆，可以继续补充他们的故事
-              </h2>
+              <span className="emotion-tag-neutral">
+                共识别出 {featuredPeople.length} 位
+              </span>
             </div>
-            <span className="emotion-tag-neutral">
-              共 {mentionedPeople.length} 位人物
-            </span>
-          </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            {mentionedPeople.map((profile) => {
-              const personNodeId =
-                personNodes.find((node) => node.profile.id === profile.id)?.id ?? ''
-              const isActive =
-                selectedNode.kind === 'person' && personNodeId && selectedNode.id === personNodeId
-
-              return (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {featuredPeople.map((person) => (
                 <button
-                  key={profile.id}
+                  key={person.id}
                   type="button"
                   onClick={() => {
+                    const personNodeId =
+                      personNodes.find((node) => node.person.id === person.id)?.id ?? ''
                     setSelectedNode({
                       kind: 'person',
                       id: personNodeId,
                     })
                   }}
                   className={`w-full rounded-[1.75rem] border px-5 py-5 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-warm ${
-                    isActive ? 'border-primary bg-primary/8' : 'border-border bg-card'
+                    selectedNode.kind === 'person' && selectedPersonId === person.id
+                      ? 'border-primary bg-primary/8'
+                      : 'border-border bg-card'
                   }`}
                 >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-elder-base font-semibold text-foreground">{profile.name}</p>
-                    <p className="mt-2 text-elder-sm text-muted-foreground">
-                      {profile.relationLabel}
-                    </p>
+                  <div className="flex gap-4">
+                    {person.photo ? (
+                      <img
+                        src={person.photo.dataUrl}
+                        alt={person.displayName}
+                        className="h-20 w-20 rounded-3xl object-cover border border-border"
+                      />
+                    ) : (
+                      <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-accent/30 text-primary">
+                        {(() => {
+                          const Icon = getPersonIcon(person)
+                          return <Icon className="h-8 w-8" />
+                        })()}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <p className="text-elder-base font-semibold text-foreground">{person.displayName}</p>
+                        <span className="emotion-tag-neutral">{person.groupLabel}</span>
+                      </div>
+                      <p className="mt-3 text-elder-sm text-muted-foreground leading-7">
+                        {person.summary}
+                      </p>
+                    </div>
                   </div>
-                  <span className="emotion-tag-neutral">
-                    {profile.sourcePlace ?? '未标注地点'}
-                  </span>
-                </div>
-                <p className="mt-4 text-elder-base text-muted-foreground leading-relaxed">
-                  {profile.summary}
-                </p>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="paper-panel space-y-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-primary">
+                <Landmark className="h-5 w-5" />
+                <span className="text-elder-base font-semibold">历史大事件数据库</span>
+              </div>
+              <h2 className="mt-3 text-elder-lg font-semibold text-foreground">
+                当前样本库覆盖建国记忆、教育转折、改革变化、航天突破与重大公共事件
+              </h2>
+            </div>
+            <span className="emotion-tag-neutral">
+              共 {historicalEvents.length} 条时代线索，可继续扩展
+            </span>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {historicalEvents.map((event) => {
+              const selectedEventId = selectedHistoryNode?.event.id ?? selectedHistoryEvent?.id ?? ''
+
+              return (
+                <button
+                  key={event.id}
+                  type="button"
+                  onClick={() => {
+                    const historyNodeId =
+                      historyNodes.find((node) => node.event.id === event.id)?.id
+                      ?? historyNodes[0]?.id
+                      ?? ''
+                    setSelectedNode({
+                      kind: 'history',
+                      id: historyNodeId,
+                    })
+                  }}
+                  className={`w-full rounded-[1.75rem] border px-5 py-5 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-warm ${
+                    selectedNode.kind === 'history' && selectedEventId === event.id
+                      ? 'border-primary bg-primary/8'
+                      : 'border-border bg-card'
+                  }`}
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-elder-base font-semibold text-foreground">{event.title}</p>
+                      <p className="mt-2 text-elder-sm text-muted-foreground">{event.locationLabel}</p>
+                    </div>
+                    <span className="emotion-tag-neutral">{event.eraLabel}</span>
+                  </div>
+                  <p className="mt-4 text-elder-base text-muted-foreground leading-relaxed">
+                    {event.summary}
+                  </p>
                 </button>
               )
             })}

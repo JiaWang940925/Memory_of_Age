@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { BookOpen, Heart, ShieldCheck, Sparkles, Volume2 } from 'lucide-react'
+import { BookOpen, Heart, ShieldCheck, Sparkles, UsersRound, Volume2 } from 'lucide-react'
 import {
   claimAudioChannel,
   getBrowserSessionId,
@@ -9,20 +9,26 @@ import {
 } from '../lib/session'
 
 interface WelcomePageProps {
-  onStart: () => void
+  onStartSelf: () => void
+  onStartForFamily: () => void
+  onOpenDailyRecall: () => void
 }
 
 const privacyCommitments = [
   '您的故事默认仅在当前设备和当前浏览器会话内处理，不上传到公开网络。',
   '如需保留记录，只保存在本地或以匿名方式整理，不直接暴露个人身份信息。',
   '每个标签页使用独立会话空间，尽量避免与其他正在运行的 session 相互覆盖。',
-  '若您主动使用数字人视频功能，系统会优先在本地调用 SadTalker，用照片和讲述音频生成视频。',
+  '系统会把您的回忆整理成地图、照片相册和时代大事提示，帮助家人一起回想。',
 ]
 
 const privacyAnnouncement =
-  '隐私保护承诺：您的故事默认仅在当前设备本地处理。如需保留，也只会在本地或匿名存储，不会上传到公开网络。若您主动使用数字人视频功能，系统会优先在本地调用 SadTalker，把照片和讲述音频合成为视频。首次使用前，请您先阅读并知晓这些说明。'
+  '隐私保护承诺：您的故事默认仅在当前设备本地处理。如需保留，也只会在本地或匿名存储，不会上传到公开网络。系统会把您的回忆整理成家庭回忆录、人物线索和日常回想提示，帮助老人和家人一起回看人生。首次使用前，请您先阅读并知晓这些说明。'
 
-export function WelcomePage({ onStart }: WelcomePageProps) {
+export function WelcomePage({
+  onStartSelf,
+  onStartForFamily,
+  onOpenDailyRecall,
+}: WelcomePageProps) {
   const [needsPrivacyNotice, setNeedsPrivacyNotice] = useState(
     () => !hasAcknowledgedPrivacyNotice(),
   )
@@ -30,6 +36,7 @@ export function WelcomePage({ onStart }: WelcomePageProps) {
   const [privacyVoiceStatus, setPrivacyVoiceStatus] = useState(
     '首次使用时会以文字和语音同步告知隐私保护承诺',
   )
+  const [pendingAction, setPendingAction] = useState<'self-story' | 'family-story' | 'daily-recall'>('self-story')
   const sessionIdRef = useRef('')
   const hasAttemptedVoiceNoticeRef = useRef(false)
 
@@ -92,15 +99,26 @@ export function WelcomePage({ onStart }: WelcomePageProps) {
     }
   }, [needsPrivacyNotice, showPrivacyDialog])
 
-  const handleStartClick = () => {
+  const handleStartClick = (nextAction: 'self-story' | 'family-story' | 'daily-recall') => {
     if (needsPrivacyNotice) {
       hasAttemptedVoiceNoticeRef.current = false
       setPrivacyVoiceStatus('正在准备隐私保护告知')
+      setPendingAction(nextAction)
       setShowPrivacyDialog(true)
       return
     }
 
-    onStart()
+    if (nextAction === 'daily-recall') {
+      onOpenDailyRecall()
+      return
+    }
+
+    if (nextAction === 'family-story') {
+      onStartForFamily()
+      return
+    }
+
+    onStartSelf()
   }
 
   const handleAcknowledgePrivacy = () => {
@@ -109,7 +127,17 @@ export function WelcomePage({ onStart }: WelcomePageProps) {
     setShowPrivacyDialog(false)
     releaseAudioChannel(sessionIdRef.current)
     window.speechSynthesis?.cancel()
-    onStart()
+    if (pendingAction === 'daily-recall') {
+      onOpenDailyRecall()
+      return
+    }
+
+    if (pendingAction === 'family-story') {
+      onStartForFamily()
+      return
+    }
+
+    onStartSelf()
   }
 
   return (
@@ -125,8 +153,8 @@ export function WelcomePage({ onStart }: WelcomePageProps) {
             <span className="text-gradient-warm">岁语</span>
           </h1>
 
-          <p className="mx-auto max-w-[18rem] text-elder-xl leading-relaxed text-muted-foreground sm:max-w-md">
-            用温暖的对话，珍藏您的人生故事
+          <p className="mx-auto max-w-[20rem] text-elder-xl leading-relaxed text-muted-foreground sm:max-w-2xl">
+            帮老人留下人生故事，也帮家人更了解父母走过的岁月
           </p>
         </div>
 
@@ -134,20 +162,20 @@ export function WelcomePage({ onStart }: WelcomePageProps) {
         <div className="mb-8 grid w-full max-w-2xl gap-4 sm:gap-6">
           <FeatureCard
             icon={<Sparkles className="w-8 h-8" />}
-            title="AI温暖陪伴"
-            description="智能对话引导，让回忆变得轻松愉快"
+            title="温和陪伴"
+            description="用更慢、更轻的提问方式，陪老人把故事慢慢讲出来"
             delay="animation-delay-100"
           />
           <FeatureCard
-            icon={<Heart className="w-8 h-8" />}
-            title="情感守护"
-            description="识别您的情绪，用积极视角重新解读往事"
+            icon={<UsersRound className="w-8 h-8" />}
+            title="家人一起整理"
+            description="支持子女陪访、补充人物和照片，把家庭记忆一起整理下来"
             delay="animation-delay-200"
           />
           <FeatureCard
             icon={<BookOpen className="w-8 h-8" />}
-            title="故事珍藏"
-            description="将对话整理成册，留给家人最珍贵的礼物"
+            title="回忆录与回想卡"
+            description="既能整理成长文回忆录，也能每天轻轻回想熟悉的人和事"
             delay="animation-delay-300"
           />
         </div>
@@ -161,7 +189,7 @@ export function WelcomePage({ onStart }: WelcomePageProps) {
               <div>
                 <h2 className="text-elder-lg font-semibold text-foreground mb-2">隐私保护承诺</h2>
                 <p className="text-elder-base text-muted-foreground">
-                  您分享的内容默认仅用于当前设备本地处理或匿名整理，不上传到公开网络。若您主动开启数字人视频，系统会优先使用本地 SadTalker 生成。
+                  您分享的内容默认仅用于当前设备本地处理或匿名整理，不上传到公开网络。整理后的内容主要用于生成家庭回忆录、人物线索、照片相册和日常回想提示。
                 </p>
               </div>
 
@@ -178,15 +206,31 @@ export function WelcomePage({ onStart }: WelcomePageProps) {
         </section>
 
         {/* 开始按钮 */}
-        <button
-          onClick={handleStartClick}
-          className="btn-primary w-full max-w-sm text-elder-lg animate-slide-up sm:w-auto sm:text-elder-xl"
-        >
-          开始我的故事
-        </button>
+        <div className="flex w-full max-w-2xl flex-col gap-4">
+          <button
+            onClick={() => handleStartClick('self-story')}
+            className="btn-primary w-full justify-center text-elder-lg animate-slide-up sm:text-elder-xl"
+          >
+            开始记录我的人生
+          </button>
+          <button
+            onClick={() => handleStartClick('family-story')}
+            className="btn-outline w-full justify-center text-elder-lg animate-slide-up sm:text-elder-xl"
+          >
+            <UsersRound className="h-6 w-6" />
+            我来帮父母整理回忆
+          </button>
+          <button
+            onClick={() => handleStartClick('daily-recall')}
+            className="btn-outline w-full justify-center text-elder-lg animate-slide-up sm:text-elder-xl"
+          >
+            <BookOpen className="h-6 w-6" />
+            今天做一次轻松回想
+          </button>
+        </div>
 
         <p className="mt-5 text-center text-elder-sm text-muted-foreground animate-fade-in sm:mt-6">
-          每一段记忆，都值得被温柔以待
+          买单的人可以是子女，真正被温柔陪伴的人应该是老人
         </p>
       </div>
 

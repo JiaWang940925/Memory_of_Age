@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
-import { Send, BookOpen, Sparkles, RefreshCw, Mic, Square, ImagePlus, X } from 'lucide-react'
+import { Send, BookOpen, Sparkles, RefreshCw, Mic, Square, ImagePlus, X, Home } from 'lucide-react'
 import type { Page, Memory, PhotoAttachment } from '../App'
 import { decodeAudioBlobToMonoPcm } from '../lib/audio'
 import {
@@ -18,7 +18,13 @@ import {
   refreshAudioChannel,
   releaseAudioChannel,
 } from '../lib/session'
-import { buildProfileSummary, type UserProfile } from '../lib/userProfile'
+import {
+  buildHouseholdSummary,
+  buildProfileSummary,
+  getInterviewModeForProfile,
+  getOperatorRoleLabel,
+  type UserProfile,
+} from '../lib/userProfile'
 
 interface ChatPageProps {
   onNavigate: (page: Page) => void
@@ -167,7 +173,8 @@ export function ChatPage({
     )
   }
 
-  const promptPlan = buildInterviewPrompts(userProfile)
+  const interviewMode = getInterviewModeForProfile(userProfile)
+  const promptPlan = buildInterviewPrompts(userProfile, interviewMode)
   const eventReminders = buildEventReminders(userProfile)
   const memoryAskedPromptIds = getInitialAskedPromptIds(promptPlan, memories)
   const storedAskedPromptIds = loadAskedPromptIds(askedPromptIdsStorageKeyRef.current)
@@ -184,7 +191,7 @@ export function ChatPage({
     {
       id: '1',
       role: 'ai',
-      content: buildOpeningQuestion(userProfile, initialPrompt),
+      content: buildOpeningQuestion(userProfile, initialPrompt, interviewMode),
     },
   ])
   const [input, setInput] = useState('')
@@ -542,6 +549,7 @@ export function ChatPage({
         emotion,
         hasPhotos,
         nextPrompt,
+        mode: interviewMode,
       }),
     }
 
@@ -718,27 +726,39 @@ export function ChatPage({
             </div>
             <div>
               <h1 className="text-elder-xl font-bold text-foreground">岁语</h1>
-              <p className="text-elder-sm text-muted-foreground">正在倾听您的故事</p>
+              <p className="text-elder-sm text-muted-foreground">
+                {interviewMode === 'family-assist' ? '正在陪家人一起整理回忆' : '正在倾听您的故事'}
+              </p>
             </div>
           </div>
 
-          <button
-            onClick={() => onNavigate('memory')}
-            className="flex w-full items-center justify-center gap-3 rounded-xl bg-accent px-4 py-3 text-foreground transition-colors hover:bg-accent/80 sm:w-auto sm:justify-start sm:px-5"
-          >
-            <BookOpen className="w-6 h-6" />
-            <span className="text-elder-sm">我的回忆录</span>
-            {memories.length > 0 && (
-              <span className="bg-primary text-primary-foreground text-base px-3 py-1 rounded-full leading-none">
-                {memories.length}
-              </span>
-            )}
-          </button>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+            <button
+              onClick={() => onNavigate('welcome')}
+              className="btn-outline w-full justify-center sm:w-auto"
+            >
+              <Home className="h-5 w-5" />
+              返回主页
+            </button>
+
+            <button
+              onClick={() => onNavigate('memory')}
+              className="flex w-full items-center justify-center gap-3 rounded-xl bg-accent px-4 py-3 text-foreground transition-colors hover:bg-accent/80 sm:w-auto sm:justify-start sm:px-5"
+            >
+              <BookOpen className="w-6 h-6" />
+              <span className="text-elder-sm">我的回忆录</span>
+              {memories.length > 0 && (
+                <span className="bg-primary text-primary-foreground text-base px-3 py-1 rounded-full leading-none">
+                  {memories.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
       <div className="bg-accent/50 border-b border-border/70 px-4 py-3 sm:px-6 sm:py-4">
-        <div className="max-w-3xl mx-auto grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="max-w-3xl mx-auto grid gap-4 lg:grid-cols-3">
           <div className="rounded-3xl bg-card/80 px-5 py-4 shadow-card">
             <p className="text-elder-sm text-muted-foreground">当前用户画像</p>
             <p className="mt-2 text-elder-base text-foreground">
@@ -746,9 +766,21 @@ export function ChatPage({
             </p>
           </div>
           <div className="rounded-3xl bg-card/80 px-5 py-4 shadow-card">
+            <p className="text-elder-sm text-muted-foreground">当前使用方式</p>
+            <p className="mt-2 text-elder-base font-semibold text-foreground">
+              {interviewMode === 'family-assist' ? '家属陪访模式' : '老人自述模式'}
+            </p>
+            <p className="mt-2 text-elder-sm text-muted-foreground">
+              {buildHouseholdSummary(userProfile)}
+            </p>
+          </div>
+          <div className="rounded-3xl bg-card/80 px-5 py-4 shadow-card">
             <p className="text-elder-sm text-muted-foreground">当前话题</p>
             <p className="mt-2 text-elder-base font-semibold text-foreground">
               {currentPrompt?.category ?? '自由补充'}
+            </p>
+            <p className="mt-2 text-elder-sm text-muted-foreground">
+              当前操作者：{getOperatorRoleLabel(userProfile.operatorRole)}
             </p>
           </div>
         </div>
@@ -765,6 +797,13 @@ export function ChatPage({
             </div>
           </div>
         )}
+
+        {interviewMode === 'family-assist' && currentPrompt?.familyHint ? (
+          <div className="max-w-3xl mx-auto mt-4 rounded-3xl bg-card/80 px-5 py-4 shadow-card">
+            <p className="text-elder-sm text-muted-foreground">给家属的追问建议</p>
+            <p className="mt-2 text-elder-base text-foreground">{currentPrompt.familyHint}</p>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
@@ -884,7 +923,11 @@ export function ChatPage({
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyPress}
-              placeholder="请慢慢讲述您的故事..."
+              placeholder={
+                interviewMode === 'family-assist'
+                  ? '可以记录老人刚刚说的话，也可以先记下关键人物、地点和生活细节。'
+                  : '请慢慢讲述您的故事...'
+              }
               className="input-warm resize-none xl:flex-1"
               rows={3}
             />
@@ -954,7 +997,9 @@ export function ChatPage({
             </span>
             <span className="text-elder-base text-muted-foreground">{photoStatus}</span>
             <span className="hidden lg:inline text-elder-base text-muted-foreground">
-              已记录的问题不会重复提问，可覆盖童年到晚年多个阶段
+              {interviewMode === 'family-assist'
+                ? '可先从称呼、地点和照片开始追问，系统会尽量避免重复提问'
+                : '已记录的问题不会重复提问，可覆盖童年到晚年多个阶段'}
             </span>
             <button
               onClick={handleSwitchTopic}

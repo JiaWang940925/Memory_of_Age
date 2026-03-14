@@ -4,10 +4,16 @@ import { ProfileSetupPage } from './components/ProfileSetupPage'
 import { ChatPage } from './components/ChatPage'
 import { MemoryPage } from './components/MemoryPage'
 import { JourneyPage } from './components/JourneyPage'
+import { DailyRecallPage } from './components/DailyRecallPage'
 import { getBrowserSessionId, getSessionScopedKey } from './lib/session'
-import type { UserProfile } from './lib/userProfile'
+import {
+  createDefaultUserProfile,
+  type OperatorRole,
+  type RelationshipToElder,
+  type UserProfile,
+} from './lib/userProfile'
 
-export type Page = 'welcome' | 'profile' | 'chat' | 'memory' | 'journey'
+export type Page = 'welcome' | 'profile' | 'chat' | 'memory' | 'journey' | 'daily-recall'
 
 export interface PhotoAttachment {
   id: string
@@ -28,30 +34,35 @@ export interface Memory {
   promptId?: string
 }
 
-export interface GeneratedAvatar {
-  jobId: string
-  provider: string
-  videoUrl: string
-  portraitDataUrl: string
-  narrationText: string
-  createdAt: string
-}
-
 interface StoredMemory extends Omit<Memory, 'timestamp'> {
   timestamp: string
 }
 
-function isGeneratedAvatar(value: unknown): value is GeneratedAvatar {
-  return Boolean(
-    value
-    && typeof value === 'object'
-    && typeof (value as GeneratedAvatar).jobId === 'string'
-    && typeof (value as GeneratedAvatar).provider === 'string'
-    && typeof (value as GeneratedAvatar).videoUrl === 'string'
-    && typeof (value as GeneratedAvatar).portraitDataUrl === 'string'
-    && typeof (value as GeneratedAvatar).narrationText === 'string'
-    && typeof (value as GeneratedAvatar).createdAt === 'string',
-  )
+interface EntryPreset {
+  operatorRole: OperatorRole
+  relationshipToElder: RelationshipToElder
+  isElderPresent: boolean
+}
+
+const SELF_STORY_PRESET: EntryPreset = {
+  operatorRole: 'elder-self',
+  relationshipToElder: 'self',
+  isElderPresent: true,
+}
+
+const FAMILY_STORY_PRESET: EntryPreset = {
+  operatorRole: 'adult-child',
+  relationshipToElder: 'other',
+  isElderPresent: true,
+}
+
+function applyEntryPreset(profile: UserProfile, preset: EntryPreset): UserProfile {
+  return {
+    ...profile,
+    operatorRole: preset.operatorRole,
+    relationshipToElder: preset.relationshipToElder,
+    isElderPresent: preset.isElderPresent,
+  }
 }
 
 function loadProfile(storageKey: string): UserProfile | null {
@@ -65,18 +76,64 @@ function loadProfile(storageKey: string): UserProfile | null {
       return null
     }
 
-    const parsed = JSON.parse(raw) as UserProfile
-    if (
-      typeof parsed?.fullName !== 'string'
-      || typeof parsed?.birthDate !== 'string'
-      || typeof parsed?.birthPlace !== 'string'
-      || typeof parsed?.gender !== 'string'
-      || typeof parsed?.hometown !== 'string'
-    ) {
+    const parsed = JSON.parse(raw) as Partial<UserProfile> | null
+    if (!parsed || typeof parsed !== 'object') {
       return null
     }
 
-    return parsed
+    const profile = createDefaultUserProfile()
+
+    return {
+      ...profile,
+      fullName: typeof parsed.fullName === 'string' ? parsed.fullName : profile.fullName,
+      familyCallName:
+        typeof parsed.familyCallName === 'string'
+          ? parsed.familyCallName
+          : profile.familyCallName,
+      birthDate: typeof parsed.birthDate === 'string' ? parsed.birthDate : profile.birthDate,
+      birthPlace:
+        typeof parsed.birthPlace === 'string' ? parsed.birthPlace : profile.birthPlace,
+      gender: typeof parsed.gender === 'string' ? parsed.gender : profile.gender,
+      hometown: typeof parsed.hometown === 'string' ? parsed.hometown : profile.hometown,
+      longTermPlace:
+        typeof parsed.longTermPlace === 'string' ? parsed.longTermPlace : profile.longTermPlace,
+      importantRole:
+        typeof parsed.importantRole === 'string' ? parsed.importantRole : profile.importantRole,
+      importantFamilyMembers:
+        typeof parsed.importantFamilyMembers === 'string'
+          ? parsed.importantFamilyMembers
+          : profile.importantFamilyMembers,
+      memoryTriggers:
+        typeof parsed.memoryTriggers === 'string'
+          ? parsed.memoryTriggers
+          : profile.memoryTriggers,
+      allowFamilyEditing:
+        typeof parsed.allowFamilyEditing === 'boolean'
+          ? parsed.allowFamilyEditing
+          : profile.allowFamilyEditing,
+      operatorRole:
+        parsed.operatorRole === 'adult-child'
+        || parsed.operatorRole === 'family-member'
+        || parsed.operatorRole === 'caregiver'
+        || parsed.operatorRole === 'elder-self'
+          ? parsed.operatorRole
+          : profile.operatorRole,
+      relationshipToElder:
+        parsed.relationshipToElder === 'self'
+        || parsed.relationshipToElder === 'son'
+        || parsed.relationshipToElder === 'daughter'
+        || parsed.relationshipToElder === 'spouse'
+        || parsed.relationshipToElder === 'grandchild'
+        || parsed.relationshipToElder === 'relative'
+        || parsed.relationshipToElder === 'caregiver'
+        || parsed.relationshipToElder === 'other'
+          ? parsed.relationshipToElder
+          : profile.relationshipToElder,
+      isElderPresent:
+        typeof parsed.isElderPresent === 'boolean'
+          ? parsed.isElderPresent
+          : profile.isElderPresent,
+    }
   } catch {
     return null
   }
@@ -94,41 +151,6 @@ function saveProfile(storageKey: string, profile: UserProfile | null) {
     }
 
     window.sessionStorage.setItem(storageKey, JSON.stringify(profile))
-  } catch {
-    // Ignore storage write failures and keep the in-memory copy usable.
-  }
-}
-
-function loadGeneratedAvatar(storageKey: string): GeneratedAvatar | null {
-  if (typeof window === 'undefined') {
-    return null
-  }
-
-  try {
-    const raw = window.sessionStorage.getItem(storageKey)
-    if (!raw) {
-      return null
-    }
-
-    const parsed = JSON.parse(raw) as unknown
-    return isGeneratedAvatar(parsed) ? parsed : null
-  } catch {
-    return null
-  }
-}
-
-function saveGeneratedAvatar(storageKey: string, avatar: GeneratedAvatar | null) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  try {
-    if (!avatar) {
-      window.sessionStorage.removeItem(storageKey)
-      return
-    }
-
-    window.sessionStorage.setItem(storageKey, JSON.stringify(avatar))
   } catch {
     // Ignore storage write failures and keep the in-memory copy usable.
   }
@@ -213,11 +235,6 @@ function App() {
     profileStorageKeyRef.current = getSessionScopedKey('profile', sessionIdRef.current)
   }
 
-  const avatarStorageKeyRef = useRef('')
-  if (!avatarStorageKeyRef.current) {
-    avatarStorageKeyRef.current = getSessionScopedKey('generated-avatar', sessionIdRef.current)
-  }
-
   const [currentPage, setCurrentPage] = useState<Page>('welcome')
   const [memories, setMemories] = useState<Memory[]>(() =>
     loadMemories(memoriesStorageKeyRef.current),
@@ -225,9 +242,7 @@ function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(() =>
     loadProfile(profileStorageKeyRef.current),
   )
-  const [generatedAvatar, setGeneratedAvatar] = useState<GeneratedAvatar | null>(() =>
-    loadGeneratedAvatar(avatarStorageKeyRef.current),
-  )
+  const [profileEntryPreset, setProfileEntryPreset] = useState<EntryPreset>(SELF_STORY_PRESET)
 
   useEffect(() => {
     saveMemories(memoriesStorageKeyRef.current, memories)
@@ -237,10 +252,6 @@ function App() {
     saveProfile(profileStorageKeyRef.current, userProfile)
   }, [userProfile])
 
-  useEffect(() => {
-    saveGeneratedAvatar(avatarStorageKeyRef.current, generatedAvatar)
-  }, [generatedAvatar])
-
   const addMemory = (memory: Memory) => {
     setMemories(prev => [...prev, memory])
   }
@@ -249,12 +260,28 @@ function App() {
     <main className="min-h-screen bg-background">
       {currentPage === 'welcome' && (
         <WelcomePage
-          onStart={() => setCurrentPage(userProfile ? 'chat' : 'profile')}
+          onStartSelf={() => {
+            setProfileEntryPreset(SELF_STORY_PRESET)
+            setUserProfile((previous) =>
+              previous ? applyEntryPreset(previous, SELF_STORY_PRESET) : previous,
+            )
+            setCurrentPage(userProfile ? 'chat' : 'profile')
+          }}
+          onStartForFamily={() => {
+            setProfileEntryPreset(FAMILY_STORY_PRESET)
+            setUserProfile((previous) =>
+              previous ? applyEntryPreset(previous, FAMILY_STORY_PRESET) : previous,
+            )
+            setCurrentPage(userProfile ? 'chat' : 'profile')
+          }}
+          onOpenDailyRecall={() => setCurrentPage('daily-recall')}
         />
       )}
       {currentPage === 'profile' && (
         <ProfileSetupPage
           initialProfile={userProfile}
+          entryPreset={profileEntryPreset}
+          onGoHome={() => setCurrentPage('welcome')}
           onSubmit={(profile) => {
             setUserProfile(profile)
             setCurrentPage('chat')
@@ -274,17 +301,25 @@ function App() {
           memories={memories}
           userProfile={userProfile}
           onBack={() => setCurrentPage('chat')}
+          onGoHome={() => setCurrentPage('welcome')}
           onOpenJourney={() => setCurrentPage('journey')}
-          generatedAvatar={generatedAvatar}
-          onAvatarGenerated={setGeneratedAvatar}
         />
       )}
       {currentPage === 'journey' && userProfile && (
         <JourneyPage
           memories={memories}
           onBack={() => setCurrentPage('memory')}
+          onGoHome={() => setCurrentPage('welcome')}
           userProfile={userProfile}
-          generatedAvatar={generatedAvatar}
+        />
+      )}
+      {currentPage === 'daily-recall' && (
+        <DailyRecallPage
+          memories={memories}
+          userProfile={userProfile}
+          onBack={() => setCurrentPage('welcome')}
+          onGoHome={() => setCurrentPage('welcome')}
+          onOpenStory={() => setCurrentPage(userProfile ? 'chat' : 'profile')}
         />
       )}
     </main>

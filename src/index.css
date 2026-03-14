@@ -322,6 +322,15 @@
     stroke-dasharray: 8 14;
   }
 
+  .sketch-route-person {
+    fill: none;
+    stroke: rgba(166, 108, 88, 0.56);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 5px;
+    stroke-dasharray: 5 12;
+  }
+
   .sketch-node {
     @apply absolute z-10 flex w-40 -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-3 text-center;
   }
@@ -341,6 +350,12 @@
     border-color: rgba(89, 113, 117, 0.42);
     color: rgba(63, 95, 100, 0.94);
     background-color: rgba(243, 246, 242, 0.96);
+  }
+
+  .sketch-node-button.person {
+    border-color: rgba(166, 108, 88, 0.42);
+    color: rgba(138, 80, 62, 0.94);
+    background-color: rgba(254, 246, 241, 0.96);
   }
 
   .sketch-node-button:hover {
@@ -425,6 +440,10 @@
 
   .map-legend-dot.person {
     background: rgba(81, 114, 117, 0.88);
+  }
+
+  .map-legend-dot.person {
+    background: rgba(166, 108, 88, 0.88);
   }
 
   .photo-album-scroll {
@@ -516,6 +535,10 @@
   }
 
   .sketch-route-branch {
+    stroke-width: 4px;
+  }
+
+  .sketch-route-person {
     stroke-width: 4px;
   }
 

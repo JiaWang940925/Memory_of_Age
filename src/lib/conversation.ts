@@ -1,5 +1,6 @@
 import type { Memory } from '../App'
 import {
+  type InterviewMode,
   type UserProfile,
   getAgeAtYear,
   getBirthYear,
@@ -13,12 +14,33 @@ export interface InterviewPrompt {
   text: string
   order: number
   promptType: 'life-stage' | 'event'
+  familyHint?: string
 }
 
 export interface EventReminder {
   id: string
   title: string
   teaser: string
+}
+
+function buildFamilyHint(category: string) {
+  switch (category) {
+    case '童年记忆':
+      return '可以先从老家的房子、称呼、谁最常陪在身边这些线索追问，不必急着一次说完整。'
+    case '求学成长':
+      return '家属可以先追问老师、同学、学校名字，或让老人先回想教室、操场、上学路。'
+    case '初入社会':
+      return '如果老人一时不知从哪里说起，可以先问第一份工作在哪里、和谁一起上班。'
+    case '工作事业':
+      return '建议家属继续追问岗位、同事、单位地点，以及最辛苦或最自豪的一件事。'
+    case '婚恋家庭':
+    case '家庭责任':
+      return '可以先从家里最重要的人开始，慢慢问称呼、关系、谁常一起吃饭或一起过节。'
+    case '时代记忆':
+      return '如果老人只记得模糊印象，家属可以先问当时住在哪里、家里在做什么、谁把消息告诉了他。'
+    default:
+      return '如果老人一时卡住，可以先换成问人物、地点、物件，再慢慢回到这段故事本身。'
+  }
 }
 
 interface LifeStagePromptSeed {
@@ -246,20 +268,33 @@ export function buildEventReminders(profile: UserProfile): EventReminder[] {
     }))
 }
 
-export function buildInterviewPrompts(profile: UserProfile): InterviewPrompt[] {
+export function buildInterviewPrompts(
+  profile: UserProfile,
+  mode: InterviewMode = 'self-narration',
+): InterviewPrompt[] {
   const stagePrompts = lifeStagePromptSeeds.map((seed) => ({
     id: seed.id,
     category: seed.category,
     text: seed.buildText(profile),
     order: seed.order,
     promptType: 'life-stage' as const,
+    familyHint: mode === 'family-assist' ? buildFamilyHint(seed.category) : undefined,
   }))
 
-  const eventPrompts = eventPromptSeeds
-    .map((seed) => {
+  const eventPrompts: Array<{
+    id: string
+    category: string
+    text: string
+    order: number
+    promptType: 'event'
+    score: number
+    familyHint?: string
+  }> = []
+
+  eventPromptSeeds.forEach((seed) => {
       const ageAtEvent = getAgeAtYear(profile, seed.eventYear)
       if (ageAtEvent === null || ageAtEvent < seed.minAge) {
-        return null
+        return
       }
 
       const isLocationMatch = seed.locationKeywords
@@ -268,46 +303,39 @@ export function buildInterviewPrompts(profile: UserProfile): InterviewPrompt[] {
       const score = scoreEvent(ageAtEvent, isLocationMatch)
 
       if (score < 2) {
-        return null
+        return
       }
 
-      return {
+      eventPrompts.push({
         id: seed.id,
         category: '时代记忆',
         text: seed.buildText(profile, ageAtEvent, isLocationMatch),
         order: getEventPromptOrder(ageAtEvent),
         promptType: 'event' as const,
         score,
-      }
+        familyHint: mode === 'family-assist' ? buildFamilyHint('时代记忆') : undefined,
+      })
     })
-    .filter(
-      (
-        prompt,
-      ): prompt is {
-        id: string
-        category: string
-        text: string
-        order: number
-        promptType: 'event'
-        score: number
-      } => prompt !== null,
-    )
+
+  return [...stagePrompts, ...eventPrompts]
     .sort((left, right) => {
       if (left.order !== right.order) {
         return left.order - right.order
       }
 
-      return right.score - left.score
-    })
+      if ('score' in left && 'score' in right) {
+        return right.score - left.score
+      }
 
-  return [...stagePrompts, ...eventPrompts]
-    .sort((left, right) => left.order - right.order)
-    .map(({ id, category, text, order, promptType }) => ({
+      return 0
+    })
+    .map(({ id, category, text, order, promptType, familyHint }) => ({
       id,
       category,
       text,
       order,
       promptType,
+      familyHint,
     }))
 }
 
@@ -344,17 +372,26 @@ export function pickNextPrompt(
 export function buildOpeningQuestion(
   profile: UserProfile,
   prompt: InterviewPrompt | null,
+  mode: InterviewMode = 'self-narration',
 ) {
   const birthYear = getBirthYear(profile)
   const profileName = getProfileDisplayName(profile)
 
   if (!prompt) {
+    if (mode === 'family-assist') {
+      return `您好。老人基础资料我已经记下了。接下来您可以陪着${profileName}，从最容易开口的人、地点或照片开始讲起，我会帮你们慢慢整理成回忆录。`
+    }
+
     return `您好，${profileName}。您的基础资料我已经记下了。接下来您可以从任何一个想讲的阶段开始，我会帮您慢慢整理成回忆录。`
   }
 
   const eraPrefix = birthYear
     ? `您出生于 ${birthYear} 年，来自 ${profile.birthPlace}。`
     : `我已经记下您来自 ${profile.birthPlace}。`
+
+  if (mode === 'family-assist') {
+    return `您好。${profileName}的资料我已经记下了。${eraPrefix} 您可以把这个问题轻轻读给ta听，也可以先从人名、地点和照片开始陪ta回想。我们先从“${prompt.category}”开始：${prompt.text}`
+  }
 
   return `您好，${profileName}。${eraPrefix} 我会结合您的年龄和成长背景，一步步陪您回顾人生。我们先从“${prompt.category}”开始吧：${prompt.text}`
 }
@@ -363,8 +400,9 @@ export function buildSmartResponse(params: {
   emotion: Memory['emotion']
   hasPhotos: boolean
   nextPrompt: InterviewPrompt | null
+  mode?: InterviewMode
 }) {
-  const { emotion, hasPhotos, nextPrompt } = params
+  const { emotion, hasPhotos, nextPrompt, mode = 'self-narration' } = params
 
   const guidanceMap: Record<Memory['emotion'], string[]> = {
     positive: [
@@ -388,7 +426,16 @@ export function buildSmartResponse(params: {
     : ''
 
   if (!nextPrompt) {
+    if (mode === 'family-assist') {
+      return `${lead}${photoTail} 你们已经整理出很多重要的人生片段了。接下来如果愿意，也可以继续自由补充任何还想留下的人和事。`
+    }
+
     return `${lead}${photoTail} 您已经分享了很多重要的人生片段。接下来如果愿意，也可以自由补充任何还想留下的故事。`
+  }
+
+  if (mode === 'family-assist') {
+    const familyTail = nextPrompt.familyHint ? ` 家属追问建议：${nextPrompt.familyHint}` : ''
+    return `${lead}${photoTail} 接下来我想继续从“${nextPrompt.category}”陪你们往前走：${nextPrompt.text}${familyTail}`
   }
 
   return `${lead}${photoTail} 接下来我想继续从“${nextPrompt.category}”陪您往前走：${nextPrompt.text}`
