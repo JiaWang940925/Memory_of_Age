@@ -1,4 +1,5 @@
 import type { Memory, PhotoAttachment } from '../App'
+import { buildInterviewPrompts } from './conversation'
 import type { UserProfile } from './userProfile'
 import { buildProfileSummary, getProfileDisplayName } from './userProfile'
 
@@ -8,6 +9,13 @@ export interface StoryPhotoItem extends PhotoAttachment {
   question: string
   answer: string
   timestamp: Date
+}
+
+interface ContinuousStory {
+  memories: Memory[]
+  paragraphs: string[]
+  photos: StoryPhotoItem[]
+  categoryCount: number
 }
 
 function escapeHtml(value: string) {
@@ -27,19 +35,67 @@ function formatStoryDate(date: Date) {
   }).format(date)
 }
 
-function getEmotionLabel(emotion: Memory['emotion']) {
-  switch (emotion) {
-    case 'positive':
-      return '温馨回忆'
-    case 'attention':
-      return '人生感悟'
-    default:
-      return '生活点滴'
-  }
-}
-
 function buildStoryAnswerHtml(answer: string) {
   return escapeHtml(answer).replace(/\n/g, '<br />')
+}
+
+function normalizeNarrativeFragment(value: string) {
+  const normalized = value
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .replace(/([，。！？；,.!?])\1+/g, '$1')
+    .trim()
+
+  if (!normalized) {
+    return ''
+  }
+
+  return /[。！？…….!?]$/.test(normalized) ? normalized : `${normalized}。`
+}
+
+function getFallbackCategoryOrder(category: string) {
+  const orderMap: Record<string, number> = {
+    童年记忆: 10,
+    求学成长: 30,
+    时代记忆: 45,
+    初入社会: 50,
+    工作事业: 60,
+    婚恋家庭: 70,
+    家庭责任: 90,
+    晚年生活: 100,
+    人生体悟: 110,
+    自由补充: 999,
+  }
+
+  return orderMap[category] ?? 900
+}
+
+function buildMemoryOrderResolver(userProfile: UserProfile | null) {
+  const promptOrderById = new Map<string, number>()
+  const promptOrderByQuestion = new Map<string, number>()
+
+  if (userProfile) {
+    buildInterviewPrompts(userProfile).forEach((prompt) => {
+      promptOrderById.set(prompt.id, prompt.order)
+      promptOrderByQuestion.set(prompt.text, prompt.order)
+    })
+  }
+
+  return (memory: Memory) => {
+    if (memory.promptId && promptOrderById.has(memory.promptId)) {
+      return promptOrderById.get(memory.promptId) ?? 900
+    }
+
+    if (promptOrderByQuestion.has(memory.question)) {
+      return promptOrderByQuestion.get(memory.question) ?? 900
+    }
+
+    return getFallbackCategoryOrder(memory.category)
+  }
 }
 
 export function buildStoryPhotoItems(memories: Memory[]) {
@@ -55,71 +111,103 @@ export function buildStoryPhotoItems(memories: Memory[]) {
   )
 }
 
-function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | null) {
-  const groupedMemories = memories.reduce((accumulator, memory) => {
-    if (!accumulator[memory.category]) {
-      accumulator[memory.category] = []
+function buildContinuousStory(memories: Memory[], userProfile: UserProfile | null) {
+  const resolveOrder = buildMemoryOrderResolver(userProfile)
+  const sortedMemories = [...memories].sort((left, right) => {
+    const orderDiff = resolveOrder(left) - resolveOrder(right)
+    if (orderDiff !== 0) {
+      return orderDiff
     }
-    accumulator[memory.category].push(memory)
-    return accumulator
-  }, {} as Record<string, Memory[]>)
-  const photoItems = buildStoryPhotoItems(memories)
-  const categoryCount = Object.keys(groupedMemories).length
+
+    const timeDiff = left.timestamp.getTime() - right.timestamp.getTime()
+    if (timeDiff !== 0) {
+      return timeDiff
+    }
+
+    return left.id.localeCompare(right.id)
+  })
+
+  const paragraphs: string[] = []
+  let currentParagraph = ''
+
+  sortedMemories
+    .map((memory) => normalizeNarrativeFragment(memory.answer))
+    .filter(Boolean)
+    .forEach((fragment) => {
+      if (!currentParagraph) {
+        currentParagraph = fragment
+        return
+      }
+
+      if (currentParagraph.length + fragment.length > 260) {
+        paragraphs.push(currentParagraph)
+        currentParagraph = fragment
+        return
+      }
+
+      currentParagraph += fragment
+    })
+
+  if (currentParagraph) {
+    paragraphs.push(currentParagraph)
+  }
+
+  return {
+    memories: sortedMemories,
+    paragraphs,
+    photos: buildStoryPhotoItems(sortedMemories),
+    categoryCount: new Set(sortedMemories.map((memory) => memory.category.trim() || '人生片段')).size,
+  } satisfies ContinuousStory
+}
+
+function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | null) {
+  const story = buildContinuousStory(memories, userProfile)
   const displayName = userProfile ? getProfileDisplayName(userProfile) : '这位长者'
   const profileSummary = userProfile
     ? buildProfileSummary(userProfile)
     : '这是一份由岁语整理的人生故事回忆录。'
   const generatedAt = formatStoryDate(new Date())
 
-  const sectionsHtml = Object.entries(groupedMemories)
-    .map(([category, categoryMemories]) => {
-      const entriesHtml = categoryMemories
-        .map((memory) => {
-          const photosHtml = memory.photos.length > 0
-            ? `
-              <div class="photo-grid">
-                ${memory.photos
-                  .map(
-                    (photo) => `
-                      <figure class="photo-card">
-                        <img src="${photo.dataUrl}" alt="${escapeHtml(photo.name)}" />
-                        <figcaption>${escapeHtml(photo.name)}</figcaption>
-                      </figure>
-                    `,
-                  )
-                  .join('')}
-              </div>
-            `
-            : ''
-
-          return `
-            <article class="memory-card">
-              <div class="memory-meta">
-                <span>${formatStoryDate(memory.timestamp)}</span>
-                <span>${getEmotionLabel(memory.emotion)}</span>
-              </div>
-              <h3>${escapeHtml(memory.question)}</h3>
-              <p class="memory-answer">${buildStoryAnswerHtml(memory.answer)}</p>
-              ${photosHtml}
-            </article>
-          `
-        })
-        .join('')
-
-      return `
-        <section class="story-section">
-          <div class="section-title">
-            <span class="section-dot"></span>
-            <h2>${escapeHtml(category)}</h2>
-            <span class="section-count">${categoryMemories.length} 段回忆</span>
-          </div>
-          <div class="section-body">
-            ${entriesHtml}
-          </div>
-        </section>
-      `
-    })
+  const articleHtml = story.paragraphs
+    .map(
+      (paragraph) => `
+        <p class="story-paragraph">${buildStoryAnswerHtml(paragraph)}</p>
+      `,
+    )
     .join('')
+
+  const photosHtml = story.photos.length > 0
+    ? `
+      <section class="photo-section">
+        <div class="section-title">
+          <span class="section-dot"></span>
+          <h2>相关照片</h2>
+          <span class="section-count">${story.photos.length} 张</span>
+        </div>
+        <div class="photo-panel">
+          <div class="story-meta">
+            <span>按口述顺序汇总</span>
+            <span>作为正文后的图像补充</span>
+          </div>
+          <div class="photo-grid">
+            ${story.photos
+              .map(
+                (photo) => `
+                  <figure class="photo-card">
+                    <img src="${photo.dataUrl}" alt="${escapeHtml(photo.name)}" />
+                    <figcaption>
+                      <strong>${escapeHtml(photo.name)}</strong>
+                      <span>${escapeHtml(photo.category)} · ${formatStoryDate(photo.timestamp)}</span>
+                    </figcaption>
+                  </figure>
+                `,
+              )
+              .join('')}
+          </div>
+        </div>
+      </section>
+    `
+    : ''
 
   return `
     <!DOCTYPE html>
@@ -153,7 +241,8 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
           }
 
           .cover,
-          .story-section {
+          .story-article,
+          .photo-section {
             page-break-inside: avoid;
           }
 
@@ -193,6 +282,16 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
             color: #6b594c;
           }
 
+          .cover-note {
+            margin-top: 18px;
+            padding: 14px 16px;
+            border-radius: 18px;
+            background: rgba(255, 248, 241, 0.9);
+            border: 1px solid rgba(195, 173, 151, 0.4);
+            font-size: 15px;
+            color: #7b6654;
+          }
+
           .stats {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -219,7 +318,8 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
             color: #473225;
           }
 
-          .story-section {
+          .story-article,
+          .photo-section {
             margin-top: 28px;
             border-radius: 24px;
             padding: 24px;
@@ -253,19 +353,19 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
             color: #8d7660;
           }
 
-          .section-body {
-            display: grid;
-            gap: 18px;
-          }
-
-          .memory-card {
+          .story-card,
+          .photo-panel {
             border-radius: 20px;
             padding: 18px;
             background: #fffaf5;
             border: 1px solid rgba(197, 177, 155, 0.45);
           }
 
-          .memory-meta {
+          .story-card {
+            margin-top: 18px;
+          }
+
+          .story-meta {
             display: flex;
             justify-content: space-between;
             gap: 12px;
@@ -274,16 +374,21 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
             color: #8d7660;
           }
 
-          h3 {
-            margin: 12px 0 0;
-            font-size: 18px;
-            color: #614634;
+          .story-paragraphs {
+            display: grid;
+            gap: 14px;
+            margin-top: 14px;
           }
 
-          .memory-answer {
-            margin: 14px 0 0;
+          .story-paragraph {
+            margin: 0;
             font-size: 16px;
             color: #473225;
+            text-indent: 2em;
+          }
+
+          .photo-panel {
+            background: rgba(255, 248, 241, 0.86);
           }
 
           .photo-grid {
@@ -312,6 +417,13 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
             padding: 10px 12px 12px;
             font-size: 12px;
             color: #7d6756;
+            display: grid;
+            gap: 4px;
+          }
+
+          .photo-card figcaption strong {
+            font-size: 13px;
+            color: #5a4331;
           }
 
           @media print {
@@ -331,7 +443,8 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
             }
 
             .cover,
-            .story-section {
+            .story-article,
+            .photo-section {
               padding: 18px;
             }
 
@@ -352,23 +465,45 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
             <div class="eyebrow">岁语 · 人生故事回忆录</div>
             <h1>${escapeHtml(displayName)}的人生故事</h1>
             <p class="cover-summary">${escapeHtml(profileSummary)}</p>
+            <p class="cover-note">
+              以下内容会把多次口述片段按时间与故事推进顺序整合成一篇连贯文章，
+              仅做轻度语句整理与标点修正，尽量保留原本的说法和情绪。
+            </p>
             <div class="stats">
               <article class="stat-card">
-                <div class="stat-label">回忆段落</div>
-                <div class="stat-value">${memories.length}</div>
+                <div class="stat-label">回忆片段</div>
+                <div class="stat-value">${story.memories.length}</div>
               </article>
               <article class="stat-card">
-                <div class="stat-label">主题章节</div>
-                <div class="stat-value">${categoryCount}</div>
+                <div class="stat-label">涉及主题</div>
+                <div class="stat-value">${story.categoryCount}</div>
               </article>
               <article class="stat-card">
                 <div class="stat-label">收录照片</div>
-                <div class="stat-value">${photoItems.length}</div>
+                <div class="stat-value">${story.photos.length}</div>
               </article>
             </div>
             <p class="cover-summary" style="margin-top: 18px;">生成日期：${generatedAt}</p>
           </section>
-          ${sectionsHtml}
+
+          <section class="story-article">
+            <div class="section-title">
+              <span class="section-dot"></span>
+              <h2>正文</h2>
+              <span class="section-count">${story.memories.length} 段口述片段</span>
+            </div>
+            <article class="story-card">
+              <div class="story-meta">
+                <span>整篇连贯文章</span>
+                <span>仅做轻度语句修整</span>
+              </div>
+              <div class="story-paragraphs">
+                ${articleHtml}
+              </div>
+            </article>
+          </section>
+
+          ${photosHtml}
         </main>
       </body>
     </html>

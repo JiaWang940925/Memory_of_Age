@@ -161,7 +161,9 @@ export function MemoryPage({
   const [isSubmittingJob, setIsSubmittingJob] = useState(false)
   const [isPreparingPortrait, setIsPreparingPortrait] = useState(false)
   const [isRecordingAudio, setIsRecordingAudio] = useState(false)
-  const [storyExportStatus, setStoryExportStatus] = useState('可打开打印版长页，并另存为 PDF 交给家人保存')
+  const [storyExportStatus, setStoryExportStatus] = useState(
+    '会把多次口述按时间顺序整理成一篇连贯文章，并可另存为 PDF 交给家人保存',
+  )
   const portraitInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
   const hasEditedNarrationRef = useRef(false)
@@ -350,7 +352,7 @@ export function MemoryPage({
   const handleOpenStoryPdf = () => {
     try {
       openMemoryStoryPdf(memories, userProfile)
-      setStoryExportStatus('打印版已打开，可直接选择“另存为 PDF”')
+      setStoryExportStatus('打印版已打开，内容会以一篇连贯文章呈现，可直接选择“另存为 PDF”')
     } catch (error) {
       setStoryExportStatus(
         error instanceof Error ? error.message : '打印版打开失败，请稍后重试',
@@ -1096,7 +1098,7 @@ export function MemoryPage({
                 <div>
                   <h2 className="text-elder-lg font-semibold text-foreground mb-2">人生故事 PDF</h2>
                   <p className="text-elder-base text-muted-foreground">
-                    把所有人生故事整理成适合打印的长页版，问题、回答和上传照片都会一起进入文档。
+                    把多次口述内容按时间与故事推进顺序整合成一篇适合打印的完整文章，尽量保留原话，只做轻度语句整理与标点修正。
                   </p>
                 </div>
               </div>

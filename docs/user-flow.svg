@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180" role="img" aria-labelledby="title desc">
+  <title id="title">Memory of Age 用户交互流程图</title>
+  <desc id="desc">从欢迎页、隐私确认、资料录入、访谈聊天，到回忆录、PDF 导出、SadTalker 数字人、人生地图的用户交互流程。</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7efe3; }
+      .panel { fill: #fffaf5; stroke: #cdb8a0; stroke-width: 2; rx: 24; ry: 24; }
+      .node { fill: #fffdf9; stroke: #9f7b5b; stroke-width: 2; rx: 20; ry: 20; }
+      .node-alt { fill: #f5f8f4; stroke: #6f8c85; stroke-width: 2; rx: 20; ry: 20; }
+      .decision { fill: #fff7ef; stroke: #c18955; stroke-width: 2; }
+      .title { font: 700 34px 'Microsoft YaHei', 'PingFang SC', sans-serif; fill: #4b3628; }
+      .subtitle { font: 500 16px 'Microsoft YaHei', 'PingFang SC', sans-serif; fill: #7b6555; }
+      .section { font: 700 22px 'Microsoft YaHei', 'PingFang SC', sans-serif; fill: #6e5038; }
+      .label { font: 600 18px 'Microsoft YaHei', 'PingFang SC', sans-serif; fill: #4a3c30; }
+      .small { font: 400 14px 'Microsoft YaHei', 'PingFang SC', sans-serif; fill: #6b5a4d; }
+      .line { stroke: #8f735d; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .line-soft { stroke: #6f8c85; stroke-width: 3; fill: none; marker-end: url(#arrowSoft); }
+      .badge { fill: #ead9c5; rx: 12; ry: 12; }
+      .badge-text { font: 700 13px 'Microsoft YaHei', 'PingFang SC', sans-serif; fill: #7b5a3f; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#8f735d" />
+    </marker>
+    <marker id="arrowSoft" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#6f8c85" />
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="1180" />
+
+  <text class="title" x="800" y="58" text-anchor="middle">Memory of Age 用户交互流程图</text>
+  <text class="subtitle" x="800" y="88" text-anchor="middle">欢迎页 → 资料建档 → 回忆访谈 → 回忆录/PDF → 本地 SadTalker 数字人 → 人生地图</text>
+
+  <rect class="panel" x="60" y="120" width="1480" height="250" />
+  <text class="section" x="90" y="155">1. 进入与建档</text>
+
+  <rect class="node" x="110" y="190" width="220" height="86" />
+  <text class="label" x="220" y="225" text-anchor="middle">欢迎页</text>
+  <text class="small" x="220" y="248" text-anchor="middle">展示产品定位与隐私承诺</text>
+
+  <polygon class="decision" points="430,182 550,235 430,288 310,235" />
+  <text class="label" x="430" y="230" text-anchor="middle">首次使用？</text>
+  <text class="small" x="430" y="251" text-anchor="middle">是否需隐私告知</text>
+
+  <rect class="node" x="630" y="190" width="250" height="86" />
+  <text class="label" x="755" y="225" text-anchor="middle">隐私告知弹窗</text>
+  <text class="small" x="755" y="248" text-anchor="middle">文字说明 + 语音播报 + 知晓确认</text>
+
+  <rect class="node" x="980" y="190" width="250" height="86" />
+  <text class="label" x="1105" y="225" text-anchor="middle">资料建档页</text>
+  <text class="small" x="1105" y="248" text-anchor="middle">称呼、生日、出生地、性别、成长地</text>
+
+  <rect class="node" x="1290" y="190" width="180" height="86" />
+  <text class="label" x="1380" y="225" text-anchor="middle">生成画像</text>
+  <text class="small" x="1380" y="248" text-anchor="middle">摘要 + 时代提醒</text>
+
+  <path class="line" d="M 330 233 L 309 233" />
+  <path class="line" d="M 550 235 L 630 233" />
+  <path class="line" d="M 880 233 L 980 233" />
+  <path class="line" d="M 1230 233 L 1290 233" />
+  <path class="line" d="M 430 289 L 430 330 L 1105 330 L 1105 276" />
+  <text class="small" x="465" y="313">否，直接进入建档</text>
+  <text class="small" x="565" y="220">是</text>
+
+  <rect class="panel" x="60" y="400" width="1480" height="330" />
+  <text class="section" x="90" y="435">2. 回忆访谈主流程</text>
+
+  <rect class="node" x="110" y="470" width="230" height="90" />
+  <text class="label" x="225" y="505" text-anchor="middle">进入 Chat 访谈页</text>
+  <text class="small" x="225" y="528" text-anchor="middle">系统加载首个问题</text>
+
+  <rect class="node" x="400" y="470" width="270" height="90" />
+  <text class="label" x="535" y="505" text-anchor="middle">规则式生成访谈问题</text>
+  <text class="small" x="535" y="528" text-anchor="middle">人生阶段问题 + 时代事件提醒</text>
+
+  <rect class="node" x="750" y="450" width="240" height="76" />
+  <text class="label" x="870" y="482" text-anchor="middle">文字输入</text>
+  <text class="small" x="870" y="503" text-anchor="middle">直接讲述回忆</text>
+
+  <rect class="node" x="750" y="544" width="240" height="76" />
+  <text class="label" x="870" y="576" text-anchor="middle">语音输入</text>
+  <text class="small" x="870" y="597" text-anchor="middle">浏览器识别或本地 Whisper</text>
+
+  <rect class="node" x="750" y="638" width="240" height="76" />
+  <text class="label" x="870" y="670" text-anchor="middle">上传照片</text>
+  <text class="small" x="870" y="691" text-anchor="middle">老照片压缩后绑定当前回忆</text>
+
+  <rect class="node-alt" x="1060" y="470" width="250" height="90" />
+  <text class="label" x="1185" y="505" text-anchor="middle">保存 Memory</text>
+  <text class="small" x="1185" y="528" text-anchor="middle">问题、回答、情绪、时间、照片</text>
+
+  <rect class="node-alt" x="1060" y="600" width="250" height="90" />
+  <text class="label" x="1185" y="635" text-anchor="middle">生成 AI 回复</text>
+  <text class="small" x="1185" y="658" text-anchor="middle">安抚/鼓励 + 下一问题，不重复提问</text>
+
+  <rect class="node" x="1360" y="534" width="130" height="92" />
+  <text class="label" x="1425" y="572" text-anchor="middle">继续访谈</text>
+  <text class="small" x="1425" y="595" text-anchor="middle">循环累积</text>
+
+  <path class="line" d="M 340 515 L 400 515" />
+  <path class="line" d="M 670 515 L 750 488" />
+  <path class="line" d="M 670 515 L 750 582" />
+  <path class="line" d="M 670 515 L 750 676" />
+  <path class="line-soft" d="M 990 488 L 1060 515" />
+  <path class="line-soft" d="M 990 582 L 1060 515" />
+  <path class="line-soft" d="M 990 676 L 1060 515" />
+  <path class="line" d="M 1185 560 L 1185 600" />
+  <path class="line" d="M 1310 645 L 1360 580" />
+  <path class="line" d="M 1425 534 L 1425 448 L 225 448 L 225 470" />
+
+  <rect class="badge" x="760" y="410" width="176" height="28" />
+  <text class="badge-text" x="848" y="429" text-anchor="middle">多模态输入汇聚</text>
+
+  <rect class="panel" x="60" y="760" width="1480" height="350" />
+  <text class="section" x="90" y="795">3. 回忆录、数字人、地图输出</text>
+
+  <rect class="node" x="110" y="840" width="230" height="90" />
+  <text class="label" x="225" y="875" text-anchor="middle">回忆录页 Memory</text>
+  <text class="small" x="225" y="898" text-anchor="middle">按分类查看所有回忆与照片</text>
+
+  <rect class="node" x="400" y="800" width="240" height="90" />
+  <text class="label" x="520" y="835" text-anchor="middle">故事打印版 / PDF</text>
+  <text class="small" x="520" y="858" text-anchor="middle">前端拼 HTML，打开打印窗口</text>
+
+  <rect class="node" x="400" y="920" width="240" height="90" />
+  <text class="label" x="520" y="955" text-anchor="middle">照片相册汇总</text>
+  <text class="small" x="520" y="978" text-anchor="middle">滚动浏览所有照片线索</text>
+
+  <rect class="node-alt" x="720" y="800" width="270" height="90" />
+  <text class="label" x="855" y="835" text-anchor="middle">SadTalker 数字人准备</text>
+  <text class="small" x="855" y="858" text-anchor="middle">选头像照片、录音/上传音频、编辑旁白</text>
+
+  <rect class="node-alt" x="1070" y="800" width="260" height="90" />
+  <text class="label" x="1200" y="835" text-anchor="middle">本地视频生成任务</text>
+  <text class="small" x="1200" y="858" text-anchor="middle">Express API → ffmpeg → SadTalker</text>
+
+  <rect class="node-alt" x="1380" y="800" width="120" height="90" />
+  <text class="label" x="1440" y="835" text-anchor="middle">视频预览</text>
+  <text class="small" x="1440" y="858" text-anchor="middle">下载保存</text>
+
+  <rect class="node" x="770" y="950" width="220" height="90" />
+  <text class="label" x="880" y="985" text-anchor="middle">人生地图 Journey</text>
+  <text class="small" x="880" y="1008" text-anchor="middle">回忆节点 + 历史人物节点</text>
+
+  <rect class="node" x="1070" y="950" width="260" height="90" />
+  <text class="label" x="1200" y="985" text-anchor="middle">场景化叙事展示</text>
+  <text class="small" x="1200" y="1008" text-anchor="middle">地图、人物来源、数字人同步展示</text>
+
+  <path class="line" d="M 340 885 L 400 845" />
+  <path class="line" d="M 340 885 L 400 965" />
+  <path class="line-soft" d="M 340 885 L 720 845" />
+  <path class="line-soft" d="M 990 845 L 1070 845" />
+  <path class="line-soft" d="M 1330 845 L 1380 845" />
+  <path class="line" d="M 340 885 L 770 995" />
+  <path class="line" d="M 990 995 L 1070 995" />
+  <path class="line-soft" d="M 1440 890 L 1440 1080 L 1200 1080 L 1200 1040" />
+
+  <text class="small" x="1030" y="1090">数字人视频生成成功后，也会回流到 Journey 页作为叙事素材</text>
+</svg>
