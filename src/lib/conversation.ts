@@ -531,16 +531,22 @@ export function buildOpeningQuestion(
   const eraPrefix = birthYear
     ? `您出生于 ${birthYear} 年，来自 ${profile.birthPlace}。`
     : `我已经记下您来自 ${profile.birthPlace}。`
+  const gentleTail = profile.memoryConcern
+    ? '我会放慢节奏，用更短、更轻的问题陪您慢慢回想。'
+    : '我会结合您的年龄和成长背景，一步步陪您回顾人生。'
 
   if (style.base === 'family') {
-    return `您好。${profileName}的资料我已经记下了。${eraPrefix} 接下来会依次了解童年地点、成年工作经历、家庭成员等人生阶段。您可以把这个问题轻轻读给ta听，也可以先从人名、地点和照片开始陪ta回想。我们先从“${prompt.category}”开始：${prompt.text}`
+    const familyGentleTail = profile.memoryConcern
+      ? '我会把问题问得更慢、更短，方便您陪着ta一起回想。'
+      : '您可以把这个问题轻轻读给ta听，也可以先从人名、地点和照片开始陪ta回想。'
+    return `您好。${profileName}的资料我已经记下了。${eraPrefix} ${familyGentleTail} 我们先从“${prompt.category}”开始：${prompt.text}`
   }
 
   if (style.base === 'caregiver') {
     return `您好。${eraPrefix} 接下来会依次了解童年地点、成年工作经历、家庭成员等人生阶段。请协助记录，我们先从“${prompt.category}”开始：${prompt.text}`
   }
 
-  return `您好，${profileName}。${eraPrefix} 我会结合您的年龄和成长背景，一步步陪您回顾人生。接下来会依次了解童年地点、成年工作经历、家庭成员等人生阶段。我们先从“${prompt.category}”开始吧：${prompt.text}`
+  return `您好，${profileName}。${eraPrefix} ${gentleTail} 接下来会依次了解童年地点、成年工作经历、家庭成员等人生阶段。我们先从“${prompt.category}”开始吧：${prompt.text}`
 }
 
 const WORK_KEYWORDS = [

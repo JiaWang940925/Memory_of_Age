@@ -1,5 +1,6 @@
 import type { Memory, PhotoAttachment } from '../App'
 import { buildInterviewPrompts } from './conversation'
+import { buildFamilyTree } from './familyTree'
 import type { UserProfile } from './userProfile'
 import { buildProfileSummary, getProfileDisplayName } from './userProfile'
 
@@ -160,6 +161,70 @@ function buildContinuousStory(memories: Memory[], userProfile: UserProfile | nul
   } satisfies ContinuousStory
 }
 
+function buildFamilyTreeHtml(memories: Memory[], userProfile: UserProfile | null) {
+  const familyTree = buildFamilyTree(userProfile, memories)
+
+  return `
+    <section class="family-tree-section">
+      <div class="section-title">
+        <span class="section-dot"></span>
+        <h2>家庭族谱</h2>
+        <span class="section-count">共 ${familyTree.totalMembers} 位（含本人）</span>
+      </div>
+      <div class="family-tree-panel">
+        ${familyTree.levels
+          .map(
+            (level) => `
+              <section class="family-tree-tier">
+                <div class="family-tree-tier-header">
+                  <span class="family-tree-tier-dot"></span>
+                  <div>
+                    <h3>${escapeHtml(level.title)}</h3>
+                    <p>${escapeHtml(level.description)}</p>
+                  </div>
+                </div>
+                ${
+                  level.members.length > 0
+                    ? `
+                      <div class="family-tree-grid">
+                        ${level.members
+                          .map(
+                            (member) => `
+                              <article class="family-member-card ${member.isSelf ? 'is-self' : ''}">
+                                <div class="family-member-head">
+                                  ${
+                                    member.photo
+                                      ? `<img src="${member.photo.dataUrl}" alt="${escapeHtml(member.displayName)}" />`
+                                      : `<div class="family-member-avatar placeholder">${escapeHtml(member.relationLabel.slice(0, 2))}</div>`
+                                  }
+                                  <div class="family-member-meta">
+                                    <span class="family-badge">${escapeHtml(member.relationLabel)}</span>
+                                    <strong>${escapeHtml(member.displayName)}</strong>
+                                    <span>${escapeHtml(member.sourceLabel)}</span>
+                                  </div>
+                                </div>
+                                <p class="family-member-summary">${escapeHtml(member.summary)}</p>
+                              </article>
+                            `,
+                          )
+                          .join('')}
+                      </div>
+                    `
+                    : `
+                      <div class="family-tree-empty">
+                        这一层暂时还没有识别到明确亲属，可继续补充称呼、名字或相关照片。
+                      </div>
+                    `
+                }
+              </section>
+            `,
+          )
+          .join('')}
+      </div>
+    </section>
+  `
+}
+
 function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | null) {
   const story = buildContinuousStory(memories, userProfile)
   const displayName = userProfile ? getProfileDisplayName(userProfile) : '这位长者'
@@ -167,6 +232,7 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
     ? buildProfileSummary(userProfile)
     : '这是一份由岁语整理的人生故事回忆录。'
   const generatedAt = formatStoryDate(new Date())
+  const familyTreeHtml = buildFamilyTreeHtml(story.memories, userProfile)
 
   const articleHtml = story.paragraphs
     .map(
@@ -241,6 +307,7 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
           }
 
           .cover,
+          .family-tree-section,
           .story-article,
           .photo-section {
             page-break-inside: avoid;
@@ -318,6 +385,7 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
             color: #473225;
           }
 
+          .family-tree-section,
           .story-article,
           .photo-section {
             margin-top: 28px;
@@ -354,7 +422,8 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
           }
 
           .story-card,
-          .photo-panel {
+          .photo-panel,
+          .family-tree-panel {
             border-radius: 20px;
             padding: 18px;
             background: #fffaf5;
@@ -389,6 +458,163 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
 
           .photo-panel {
             background: rgba(255, 248, 241, 0.86);
+          }
+
+          .family-tree-panel {
+            display: grid;
+            gap: 18px;
+            background: rgba(255, 248, 241, 0.9);
+          }
+
+          .family-tree-tier {
+            position: relative;
+            padding-left: 24px;
+          }
+
+          .family-tree-tier::before {
+            content: '';
+            position: absolute;
+            left: 7px;
+            top: 8px;
+            bottom: -18px;
+            width: 2px;
+            background: linear-gradient(180deg, rgba(201, 153, 110, 0.9), rgba(121, 153, 137, 0.3));
+          }
+
+          .family-tree-tier:last-child::before {
+            bottom: 56px;
+          }
+
+          .family-tree-tier-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 14px;
+          }
+
+          .family-tree-tier-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 999px;
+            margin-top: 5px;
+            background: linear-gradient(135deg, #cb9264, #6e9484);
+            box-shadow: 0 0 0 6px rgba(255, 248, 241, 0.96);
+            flex-shrink: 0;
+          }
+
+          .family-tree-tier h3 {
+            margin: 0;
+            font-size: 18px;
+            color: #4b3628;
+          }
+
+          .family-tree-tier p {
+            margin: 4px 0 0;
+            font-size: 13px;
+            color: #8d7660;
+          }
+
+          .family-tree-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+          }
+
+          .family-member-card {
+            position: relative;
+            border-radius: 18px;
+            padding: 14px;
+            background:
+              linear-gradient(180deg, rgba(255, 253, 249, 0.96), rgba(255, 247, 238, 0.94)),
+              radial-gradient(circle at top right, rgba(225, 192, 153, 0.18), transparent 28%);
+            border: 1px solid rgba(193, 170, 145, 0.58);
+          }
+
+          .family-member-card::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 34px;
+            width: 12px;
+            height: 2px;
+            background: rgba(181, 144, 110, 0.66);
+          }
+
+          .family-member-card.is-self {
+            border-color: rgba(168, 118, 84, 0.52);
+            background:
+              linear-gradient(180deg, rgba(255, 245, 232, 0.98), rgba(255, 249, 243, 0.94)),
+              radial-gradient(circle at top right, rgba(220, 164, 120, 0.24), transparent 32%);
+          }
+
+          .family-member-head {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+          }
+
+          .family-member-head img,
+          .family-member-avatar {
+            width: 72px;
+            height: 72px;
+            border-radius: 18px;
+            border: 1px solid rgba(187, 162, 138, 0.54);
+            object-fit: cover;
+            flex-shrink: 0;
+          }
+
+          .family-member-avatar.placeholder {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            font-weight: 700;
+            color: #8d674a;
+            background: linear-gradient(135deg, rgba(255, 241, 223, 0.98), rgba(246, 235, 224, 0.96));
+          }
+
+          .family-member-meta {
+            display: grid;
+            gap: 6px;
+          }
+
+          .family-member-meta strong {
+            font-size: 16px;
+            color: #4b3628;
+          }
+
+          .family-member-meta span {
+            font-size: 12px;
+            color: #8d7660;
+          }
+
+          .family-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: fit-content;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(238, 226, 210, 0.82);
+            color: #715845;
+            font-size: 12px;
+            font-weight: 700;
+          }
+
+          .family-member-summary {
+            margin: 12px 0 0;
+            font-size: 13px;
+            line-height: 1.7;
+            color: #6f5948;
+          }
+
+          .family-tree-empty {
+            border-radius: 18px;
+            padding: 14px 16px;
+            background: rgba(255, 251, 246, 0.88);
+            border: 1px dashed rgba(188, 161, 134, 0.72);
+            font-size: 13px;
+            color: #7d6756;
           }
 
           .photo-grid {
@@ -443,6 +669,7 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
             }
 
             .cover,
+            .family-tree-section,
             .story-article,
             .photo-section {
               padding: 18px;
@@ -453,7 +680,8 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
             }
 
             .stats,
-            .photo-grid {
+            .photo-grid,
+            .family-tree-grid {
               grid-template-columns: 1fr;
             }
           }
@@ -485,6 +713,8 @@ function buildMemoryStoryHtml(memories: Memory[], userProfile: UserProfile | nul
             </div>
             <p class="cover-summary" style="margin-top: 18px;">生成日期：${generatedAt}</p>
           </section>
+
+          ${familyTreeHtml}
 
           <section class="story-article">
             <div class="section-title">

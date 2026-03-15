@@ -26,6 +26,29 @@ export interface DailyRecallAssessment {
   responseState: DailyRecallResponseState
 }
 
+export interface DailyRecallLogEntry {
+  id: string
+  itemId: string
+  itemTitle: string
+  prompt: string
+  topic: string
+  responseState: DailyRecallResponseState
+  answer: string
+  recordedAt: string
+}
+
+export interface DailyRecallWeeklySummaryItem {
+  date: string
+  totalReviews: number
+  selfRecalledCount: number
+  afterCueCount: number
+  familySupportedCount: number
+  restCount: number
+  topics: string[]
+}
+
+export interface DailyRecallDailySummaryItem extends DailyRecallWeeklySummaryItem {}
+
 const stopPhrases = ['然后', '就是', '那个', '我们', '他们', '时候', '自己', '觉得', '特别', '一直', '后来']
 
 function escapeHtml(value: string) {
@@ -50,6 +73,10 @@ function truncateText(value: string, maxLength: number) {
   }
 
   return `${trimmed.slice(0, maxLength)}...`
+}
+
+function unique(values: string[]) {
+  return [...new Set(values.filter(Boolean))]
 }
 
 function buildKeywordList(value: string) {
@@ -322,6 +349,78 @@ export function buildDailyRecallFeedback(params: {
         responseState,
       } satisfies DailyRecallAssessment
   }
+}
+
+export function buildDailyRecallLogEntry(params: {
+  item: DailyRecallItem
+  answer: string
+  responseState: DailyRecallResponseState
+  now?: Date
+}): DailyRecallLogEntry {
+  const timestamp = params.now ?? new Date()
+
+  return {
+    id: `${params.item.id}-${timestamp.getTime()}`,
+    itemId: params.item.id,
+    itemTitle: params.item.title,
+    prompt: params.item.prompt,
+    topic: params.item.topic,
+    responseState: params.responseState,
+    answer: params.answer.trim(),
+    recordedAt: timestamp.toISOString(),
+  }
+}
+
+function formatDayKey(date: Date) {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function summarizeDayEntries(date: string, entries: DailyRecallLogEntry[]) {
+  return {
+    date,
+    totalReviews: entries.length,
+    selfRecalledCount: entries.filter((entry) => entry.responseState === 'self-recalled').length,
+    afterCueCount: entries.filter((entry) => entry.responseState === 'after-cue').length,
+    familySupportedCount: entries.filter((entry) => entry.responseState === 'family-supported').length,
+    restCount: entries.filter((entry) => entry.responseState === 'rest-now').length,
+    topics: unique(entries.map((entry) => entry.itemTitle || entry.topic)).slice(0, 4),
+  } satisfies DailyRecallWeeklySummaryItem
+}
+
+export function summarizePastWeekDailyRecall(
+  history: DailyRecallLogEntry[],
+  now: Date = new Date(),
+): DailyRecallWeeklySummaryItem[] {
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+
+  return Array.from({ length: 7 }, (_, offset) => {
+    const day = new Date(today)
+    day.setDate(today.getDate() - (6 - offset))
+    const dayKey = formatDayKey(day)
+    const dayEntries = history.filter((entry) => formatDayKey(new Date(entry.recordedAt)) === dayKey)
+    return summarizeDayEntries(dayKey, dayEntries)
+  })
+}
+
+export function summarizeDailyRecallHistory(
+  history: DailyRecallLogEntry[],
+): DailyRecallDailySummaryItem[] {
+  const grouped = new Map<string, DailyRecallLogEntry[]>()
+
+  history.forEach((entry) => {
+    const dayKey = formatDayKey(new Date(entry.recordedAt))
+    const items = grouped.get(dayKey) ?? []
+    items.push(entry)
+    grouped.set(dayKey, items)
+  })
+
+  return [...grouped.entries()]
+    .sort((left, right) => left[0].localeCompare(right[0]))
+    .map(([date, entries]) => summarizeDayEntries(date, entries))
 }
 
 export function openDailyRecallFile(items: DailyRecallItem[], userProfile: UserProfile | null) {

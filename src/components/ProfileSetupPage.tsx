@@ -250,14 +250,14 @@ export function ProfileSetupPage({
                   </label>
                   <label className="rounded-2xl border border-border bg-accent/25 px-4 py-4">
                     <span className="block text-elder-base text-foreground">
-                      老人是否有记忆困扰（如记忆力下降、阿兹海默症）
+                      老人是否有记忆困扰或明显的回想困难
                     </span>
                     <span className="mt-2 block text-elder-sm text-muted-foreground">
-                      此信息仅用于调整提问方式，帮助更温和地引导回忆。
+                      这项只用于把提问方式调得更慢、更轻，不会生成医学判断。
                     </span>
                     <div className="mt-3 flex items-center justify-between">
                       <span className="text-elder-sm text-muted-foreground">
-                        {form.memoryConcern ? '已勾选：需要更温和的提问方式' : '未勾选'}
+                        {form.memoryConcern ? '已开启更温和的陪伴方式' : '按标准方式整理'}
                       </span>
                       <input
                         type="checkbox"

@@ -1,5 +1,20 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { BookOpen, Heart, ShieldCheck, Sparkles, UsersRound, Volume2 } from 'lucide-react'
+import {
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  Heart,
+  ShieldCheck,
+  Sparkles,
+  UsersRound,
+  Volume2,
+} from 'lucide-react'
+import {
+  summarizePastWeekDailyRecall,
+  summarizeDailyRecallHistory,
+  type DailyRecallLogEntry,
+  type DailyRecallWeeklySummaryItem,
+} from '../lib/dailyRecall'
 import {
   claimAudioChannel,
   getBrowserSessionId,
@@ -12,12 +27,12 @@ interface WelcomePageProps {
   onStartSelf: () => void
   onStartForFamily: () => void
   onOpenDailyRecall: () => void
+  dailyRecallHistory: DailyRecallLogEntry[]
 }
 
 const privacyCommitments = [
   '您的故事默认仅在当前设备和当前浏览器会话内处理，不上传到公开网络。',
   '如需保留记录，只保存在本地或以匿名方式整理，不直接暴露个人身份信息。',
-  '每个标签页使用独立会话空间，尽量避免与其他正在运行的 session 相互覆盖。',
   '系统会把您的回忆整理成地图、照片相册和时代大事提示，帮助家人一起回想。',
 ]
 
@@ -28,6 +43,7 @@ export function WelcomePage({
   onStartSelf,
   onStartForFamily,
   onOpenDailyRecall,
+  dailyRecallHistory,
 }: WelcomePageProps) {
   const [needsPrivacyNotice, setNeedsPrivacyNotice] = useState(
     () => !hasAcknowledgedPrivacyNotice(),
@@ -37,8 +53,23 @@ export function WelcomePage({
     '首次使用时会以文字和语音同步告知隐私保护承诺',
   )
   const [pendingAction, setPendingAction] = useState<'self-story' | 'family-story' | 'daily-recall'>('self-story')
+  const [showOlderRecallHistory, setShowOlderRecallHistory] = useState(false)
+  const [selectedRecallIndex, setSelectedRecallIndex] = useState(6)
   const sessionIdRef = useRef('')
   const hasAttemptedVoiceNoticeRef = useRef(false)
+  const weeklyRecallSummary = summarizePastWeekDailyRecall(dailyRecallHistory)
+  const allRecallSummary = summarizeDailyRecallHistory(dailyRecallHistory)
+  const weekStartDate = weeklyRecallSummary[0]?.date ?? ''
+  const olderRecallSummary = allRecallSummary.filter((item) => item.date < weekStartDate)
+  const selectedRecallDay =
+    weeklyRecallSummary[selectedRecallIndex] ?? weeklyRecallSummary[weeklyRecallSummary.length - 1]
+  const weeklyReviewCount = weeklyRecallSummary.reduce((sum, item) => sum + item.totalReviews, 0)
+  const weeklySelfCount = weeklyRecallSummary.reduce((sum, item) => sum + item.selfRecalledCount, 0)
+  const weeklySupportCount = weeklyRecallSummary.reduce(
+    (sum, item) => sum + item.afterCueCount + item.familySupportedCount,
+    0,
+  )
+  const activeDays = weeklyRecallSummary.filter((item) => item.totalReviews > 0).length
 
   if (!sessionIdRef.current) {
     sessionIdRef.current = getBrowserSessionId()
@@ -98,6 +129,16 @@ export function WelcomePage({
       window.speechSynthesis.cancel()
     }
   }, [needsPrivacyNotice, showPrivacyDialog])
+
+  useEffect(() => {
+    setSelectedRecallIndex((previous) => {
+      if (weeklyRecallSummary.length === 0) {
+        return 0
+      }
+
+      return Math.min(previous, weeklyRecallSummary.length - 1)
+    })
+  }, [weeklyRecallSummary.length])
 
   const handleStartClick = (nextAction: 'self-story' | 'family-story' | 'daily-recall') => {
     if (needsPrivacyNotice) {
@@ -205,6 +246,208 @@ export function WelcomePage({
           </div>
         </section>
 
+        <section className="card-warm mb-8 w-full max-w-2xl animate-slide-up sm:mb-10">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:h-14 sm:w-14 sm:rounded-2xl">
+              <BookOpen className="h-7 w-7 sm:h-8 sm:w-8" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="mb-2 text-elder-lg font-semibold text-foreground">过去一周回想情况</h2>
+              <p className="text-elder-base text-muted-foreground">
+                把最近七天“日常回想”的陪伴记录汇总在一起，方便家人快速了解哪几天有回想、当天主要是自己想起，还是需要提示和陪伴。
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-3xl bg-accent/30 px-4 py-4">
+              <p className="text-elder-sm text-muted-foreground">最近七天</p>
+              <p className="mt-2 text-elder-base font-semibold text-foreground">
+                {activeDays} 天有记录
+              </p>
+            </div>
+            <div className="rounded-3xl bg-accent/30 px-4 py-4">
+              <p className="text-elder-sm text-muted-foreground">完成回想</p>
+              <p className="mt-2 text-elder-base font-semibold text-foreground">
+                {weeklyReviewCount} 次
+              </p>
+            </div>
+            <div className="rounded-3xl bg-accent/30 px-4 py-4">
+              <p className="text-elder-sm text-muted-foreground">主要方式</p>
+              <p className="mt-2 text-elder-base font-semibold text-foreground">
+                {weeklySelfCount >= weeklySupportCount ? '更多是自己想起' : '更多需要提示或陪伴'}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-[1.75rem] border border-border bg-background/80 px-4 py-4 sm:px-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-elder-base font-semibold text-foreground">七天记录</p>
+                <p className="text-elder-sm text-muted-foreground">
+                  点击下方日期，查看当天的回想方式和主要话题
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRecallIndex((previous) => Math.max(previous - 1, 0))}
+                  disabled={selectedRecallIndex === 0}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="查看前一天"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedRecallIndex((previous) =>
+                      Math.min(previous + 1, weeklyRecallSummary.length - 1),
+                    )
+                  }
+                  disabled={selectedRecallIndex >= weeklyRecallSummary.length - 1}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label="查看后一天"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {weeklyRecallSummary.map((item, index) => (
+                <button
+                  key={item.date}
+                  type="button"
+                  onClick={() => setSelectedRecallIndex(index)}
+                  className={`rounded-2xl border px-3 py-3 text-left transition-all ${
+                    index === selectedRecallIndex
+                      ? 'border-primary bg-primary/10 shadow-warm'
+                      : 'border-border bg-card hover:bg-accent/70'
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-foreground">
+                    {formatShortDateLabel(item.date)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.totalReviews > 0 ? `${item.totalReviews} 次回想` : '暂无记录'}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {selectedRecallDay ? (
+            <article className="mt-4 rounded-3xl border border-border bg-background/80 px-5 py-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-elder-base font-semibold text-foreground">
+                    {formatDateLabel(selectedRecallDay.date)}
+                  </p>
+                  <p className="text-elder-sm text-muted-foreground">
+                    {selectedRecallDay.totalReviews > 0
+                      ? buildRecallDaySummary(selectedRecallDay)
+                      : '这一天还没有留下日常回想记录'}
+                  </p>
+                </div>
+                <span className="emotion-tag-neutral">
+                  {selectedRecallDay.totalReviews > 0
+                    ? `${selectedRecallDay.totalReviews} 次回想`
+                    : '暂无记录'}
+                </span>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="emotion-tag-positive">
+                  自己想起 {selectedRecallDay.selfRecalledCount}
+                </span>
+                <span className="emotion-tag-neutral">
+                  看提示后 {selectedRecallDay.afterCueCount}
+                </span>
+                <span className="emotion-tag-neutral">
+                  家人陪同 {selectedRecallDay.familySupportedCount}
+                </span>
+                <span className="emotion-tag-attention">
+                  今天休息 {selectedRecallDay.restCount}
+                </span>
+              </div>
+
+              <div className="mt-3 rounded-2xl bg-accent/30 px-4 py-3">
+                <p className="text-elder-sm font-semibold text-foreground">当天主要回想话题</p>
+                {selectedRecallDay.topics.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {selectedRecallDay.topics.map((topic) => (
+                      <span
+                        key={`${selectedRecallDay.date}-${topic}`}
+                        className="emotion-tag-neutral"
+                      >
+                        {topic}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-elder-sm text-muted-foreground">
+                    完成每日回想后，这里会自动出现当天涉及的话题。
+                  </p>
+                )}
+              </div>
+            </article>
+          ) : null}
+
+          <div className="mt-4 rounded-[1.75rem] border border-border bg-background/80 px-4 py-4 sm:px-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-elder-base font-semibold text-foreground">更早日期记录</p>
+                <p className="text-elder-sm text-muted-foreground">
+                  想回看七天以前的陪伴记录，可以展开查看更早的日期。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOlderRecallHistory((previous) => !previous)}
+                disabled={olderRecallSummary.length === 0}
+                className="btn-outline min-h-[3.5rem] px-5 py-3 text-base disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {showOlderRecallHistory ? '收起更早记录' : '查看更早日期记录'}
+              </button>
+            </div>
+
+            {showOlderRecallHistory ? (
+              olderRecallSummary.length > 0 ? (
+                <div className="mt-4 grid gap-3">
+                  {olderRecallSummary
+                    .slice()
+                    .reverse()
+                    .map((item) => (
+                      <div
+                        key={item.date}
+                        className="rounded-2xl border border-border bg-card px-4 py-4"
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-elder-base font-semibold text-foreground">
+                            {formatDateLabel(item.date)}
+                          </p>
+                          <span className="text-elder-sm text-muted-foreground">
+                            {item.totalReviews > 0 ? `${item.totalReviews} 次回想` : '暂无记录'}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-elder-sm text-muted-foreground">
+                          {item.totalReviews > 0
+                            ? buildRecallDaySummary(item)
+                            : '这一天没有留下新的回想记录。'}
+                        </p>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-elder-base text-muted-foreground">
+                  目前还没有七天以前的日常回想记录。
+                </p>
+              )
+            ) : null}
+          </div>
+        </section>
+
         {/* 开始按钮 */}
         <div className="flex w-full max-w-2xl flex-col gap-4">
           <button
@@ -230,7 +473,7 @@ export function WelcomePage({
         </div>
 
         <p className="mt-5 text-center text-elder-sm text-muted-foreground animate-fade-in sm:mt-6">
-          买单的人可以是子女，真正被温柔陪伴的人应该是老人
+          岁语，让年岁讲出自己的故事
         </p>
       </div>
 
@@ -305,4 +548,39 @@ function FeatureCard({ icon, title, description, delay }: FeatureCardProps) {
       </div>
     </div>
   )
+}
+
+function formatDateLabel(date: string) {
+  const [year, month, day] = date.split('-').map((value) => Number.parseInt(value, 10))
+  const parsedDate = new Date(year, (month || 1) - 1, day || 1)
+  return parsedDate.toLocaleDateString('zh-CN', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  })
+}
+
+function formatShortDateLabel(date: string) {
+  const [, month, day] = date.split('-')
+  return `${Number.parseInt(month || '1', 10)}/${Number.parseInt(day || '1', 10)}`
+}
+
+function buildRecallDaySummary(item: DailyRecallWeeklySummaryItem) {
+  if (item.totalReviews === 0) {
+    return '这一天还没有留下日常回想记录'
+  }
+
+  if (item.selfRecalledCount >= item.afterCueCount + item.familySupportedCount) {
+    return `当天完成 ${item.totalReviews} 次回想，主要是自己慢慢想起来的。`
+  }
+
+  if (item.familySupportedCount > 0) {
+    return `当天完成 ${item.totalReviews} 次回想，更多是在家人陪伴下完成。`
+  }
+
+  if (item.afterCueCount > 0) {
+    return `当天完成 ${item.totalReviews} 次回想，主要是看提示后继续想起来。`
+  }
+
+  return `当天完成 ${item.totalReviews} 次回想。`
 }

@@ -175,7 +175,7 @@ export function buildHouseholdSummary(profile: UserProfile) {
     `与老人关系 ${getRelationshipLabel(profile.relationshipToElder)}`,
     profile.isElderPresent ? '老人当前在场' : '老人当前不在场',
     profile.allowFamilyEditing ? '允许家属继续补充' : '仅保留老人本人内容',
-    profile.memoryConcern ? '记忆困扰：已提示' : '记忆困扰：未说明',
+    profile.memoryConcern ? '已开启更温和的回想方式' : '标准回想方式',
   ]
 
   if (profile.importantFamilyMembers.trim()) {

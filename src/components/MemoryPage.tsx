@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Clock,
   Download,
+  Film,
   Heart,
   Home,
   Image as ImageIcon,
@@ -11,11 +12,15 @@ import {
   Route,
   Sparkles,
   Tag,
+  UserRound,
+  UsersRound,
 } from 'lucide-react'
 import type { Memory } from '../App'
+import { buildFamilyTree } from '../lib/familyTree'
 import { buildFeaturedHistoricalEvents, historicalEvents } from '../lib/historicalEvents'
 import { buildStoryPhotoItems, openMemoryStoryPdf } from '../lib/memoryBook'
 import type { UserProfile } from '../lib/userProfile'
+import { memoryVideos } from '../lib/videoGallery'
 
 interface MemoryPageProps {
   memories: Memory[]
@@ -51,6 +56,82 @@ function buildMemoryQuery(memory: Memory) {
   return `${memory.category} ${memory.question} ${memory.answer}`
 }
 
+function MemoryVideoSection() {
+  return (
+    <section className="card-warm space-y-5">
+      <div className="flex items-start gap-4">
+        <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-secondary/15 text-secondary">
+          <Film className="h-7 w-7" />
+        </div>
+        <div>
+          <h2 className="text-elder-lg font-semibold text-foreground mb-2">回忆影像</h2>
+          <p className="text-elder-base text-muted-foreground">
+            这里汇总了本地 `video` 目录里的家庭影像，可以直接播放，帮助家人一边看片段一边继续补充故事。
+          </p>
+        </div>
+      </div>
+
+      {memoryVideos.length > 0 ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-3xl bg-accent/35 px-4 py-4">
+              <p className="text-elder-sm text-muted-foreground">视频数量</p>
+              <p className="mt-2 text-elder-base font-semibold text-foreground">
+                {memoryVideos.length} 段
+              </p>
+            </div>
+            <div className="rounded-3xl bg-accent/35 px-4 py-4">
+              <p className="text-elder-sm text-muted-foreground">展示方式</p>
+              <p className="mt-2 text-elder-base font-semibold text-foreground">
+                页面内直接播放
+              </p>
+            </div>
+            <div className="rounded-3xl bg-accent/35 px-4 py-4">
+              <p className="text-elder-sm text-muted-foreground">适合场景</p>
+              <p className="mt-2 text-elder-base font-semibold text-foreground">
+                边看边聊边补充
+              </p>
+            </div>
+          </div>
+
+          <div className="memory-video-grid">
+            {memoryVideos.map((video) => (
+              <article key={video.id} className="memory-video-card">
+                <div className="memory-video-frame">
+                  <video
+                    className="memory-video-player"
+                    controls
+                    playsInline
+                    preload="metadata"
+                  >
+                    <source src={video.url} type="video/mp4" />
+                    您当前的浏览器暂不支持视频播放。
+                  </video>
+                </div>
+
+                <div className="space-y-3 px-4 py-4">
+                  <div className="flex flex-wrap gap-2">
+                    <span className="emotion-tag-neutral">本地视频</span>
+                    <span className="emotion-tag-positive">{video.title}</span>
+                  </div>
+                  <p className="text-elder-base font-semibold text-foreground">{video.title}</p>
+                  <p className="text-elder-sm text-muted-foreground break-all">{video.fileName}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="rounded-3xl border border-dashed border-border bg-accent/20 px-5 py-6">
+          <p className="text-elder-base text-muted-foreground">
+            目前还没有读取到本地视频。把 `mp4` 文件放进项目根目录下的 `video` 文件夹后，这里会自动展示。
+          </p>
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function MemoryPage({
   memories,
   userProfile,
@@ -60,7 +141,7 @@ export function MemoryPage({
   onOpenJourney,
 }: MemoryPageProps) {
   const [storyExportStatus, setStoryExportStatus] = useState(
-    '会把多次口述按时间与故事推进顺序整理成一篇连贯文章，并可另存为 PDF 交给家人保存',
+    '会把多次口述按时间与故事推进顺序整理成一篇连贯文章，并附上一页带亲属照片的家庭族谱，可另存为 PDF 交给家人保存',
   )
 
   const groupedMemories = memories.reduce((accumulator, memory) => {
@@ -77,6 +158,7 @@ export function MemoryPage({
   )
   const storyPhotoItems = buildStoryPhotoItems(memories)
   const memoryCategories = Object.keys(groupedMemories)
+  const familyTree = buildFamilyTree(userProfile, memories)
   const featuredEvents = userProfile
     ? buildFeaturedHistoricalEvents(
         userProfile,
@@ -88,7 +170,9 @@ export function MemoryPage({
   const handleOpenStoryPdf = () => {
     try {
       openMemoryStoryPdf(memories, userProfile)
-      setStoryExportStatus('打印版已打开，内容会以一篇连贯文章呈现，可直接选择“另存为 PDF”')
+      setStoryExportStatus(
+        '打印版已打开，内容会以连贯文章加家庭族谱的形式呈现，可直接选择“另存为 PDF”',
+      )
     } catch (error) {
       setStoryExportStatus(
         error instanceof Error ? error.message : '打印版打开失败，请稍后重试',
@@ -135,19 +219,23 @@ export function MemoryPage({
         </header>
 
         <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
-          <div className="text-center py-16">
-            <div className="w-20 h-20 rounded-full bg-accent mx-auto mb-6 flex items-center justify-center">
-              <Heart className="w-10 h-10 text-primary" />
+          <div className="space-y-10">
+            <div className="text-center py-16">
+              <div className="w-20 h-20 rounded-full bg-accent mx-auto mb-6 flex items-center justify-center">
+                <Heart className="w-10 h-10 text-primary" />
+              </div>
+              <h2 className="text-elder-xl font-semibold text-foreground mb-3">
+                开始记录您的故事
+              </h2>
+              <p className="text-elder-base text-muted-foreground max-w-sm mx-auto">
+                先积累一些文字或照片，后面才能把人生片段整理成地图、相册和时代记忆线索。
+              </p>
+              <button onClick={onBack} className="btn-primary mt-8 w-full sm:w-auto">
+                开始对话
+              </button>
             </div>
-            <h2 className="text-elder-xl font-semibold text-foreground mb-3">
-              开始记录您的故事
-            </h2>
-            <p className="text-elder-base text-muted-foreground max-w-sm mx-auto">
-              先积累一些文字或照片，后面才能把人生片段整理成地图、相册和时代记忆线索。
-            </p>
-            <button onClick={onBack} className="btn-primary mt-8 w-full sm:w-auto">
-              开始对话
-            </button>
+
+            <MemoryVideoSection />
           </div>
         </div>
       </div>
@@ -268,6 +356,108 @@ export function MemoryPage({
               </div>
             </article>
           </section>
+
+          <section className="card-warm space-y-6">
+            <div className="flex items-start gap-4">
+              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <UsersRound className="h-7 w-7" />
+              </div>
+              <div>
+                <h2 className="text-elder-lg font-semibold text-foreground mb-2">家庭族谱</h2>
+                <p className="text-elder-base text-muted-foreground">
+                  系统会结合资料页填写的家庭线索和已记录的回忆，先整理出“父母层 - 个人层 - 子女层 - 孙辈层”的家庭树。若相关回忆里带了照片，也会自动放到对应亲属节点上。
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-3xl bg-accent/35 px-4 py-4">
+                <p className="text-elder-sm text-muted-foreground">已识别亲属</p>
+                <p className="mt-2 text-elder-base font-semibold text-foreground">
+                  {familyTree.relativeCount} 位
+                </p>
+              </div>
+              <div className="rounded-3xl bg-accent/35 px-4 py-4">
+                <p className="text-elder-sm text-muted-foreground">带照片节点</p>
+                <p className="mt-2 text-elder-base font-semibold text-foreground">
+                  {familyTree.photoCount} 位
+                </p>
+              </div>
+              <div className="rounded-3xl bg-accent/35 px-4 py-4">
+                <p className="text-elder-sm text-muted-foreground">整理对象</p>
+                <p className="mt-2 text-elder-base font-semibold text-foreground">
+                  {familyTree.subjectName}
+                </p>
+              </div>
+            </div>
+
+            <div className="family-tree-stack">
+              {familyTree.levels.map((level) => (
+                <section key={level.id} className="family-tree-level">
+                  <div className="family-tree-level-header">
+                    <span className="family-tree-level-dot" aria-hidden="true" />
+                    <div>
+                      <h3 className="text-elder-base font-semibold text-foreground">{level.title}</h3>
+                      <p className="mt-1 text-elder-sm text-muted-foreground">
+                        {level.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  {level.members.length > 0 ? (
+                    <div className="family-tree-grid">
+                      {level.members.map((member) => (
+                        <article
+                          key={member.id}
+                          className={`family-tree-node ${member.isSelf ? 'family-tree-node-self' : ''}`}
+                        >
+                          <div className="flex items-start gap-4">
+                            {member.photo ? (
+                              <img
+                                src={member.photo.dataUrl}
+                                alt={member.displayName}
+                                className="family-tree-avatar"
+                              />
+                            ) : (
+                              <div className="family-tree-avatar family-tree-avatar-placeholder">
+                                <UserRound className="h-8 w-8" />
+                              </div>
+                            )}
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={member.isSelf ? 'emotion-tag-positive' : 'emotion-tag-neutral'}>
+                                  {member.relationLabel}
+                                </span>
+                              </div>
+                              <p className="mt-3 text-elder-base font-semibold text-foreground">
+                                {member.displayName}
+                              </p>
+                              <p className="mt-1 text-elder-sm text-muted-foreground">
+                                {member.sourceLabel}
+                              </p>
+                            </div>
+                          </div>
+
+                          <p className="mt-4 text-elder-sm leading-7 text-muted-foreground">
+                            {member.summary}
+                          </p>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="family-tree-empty">
+                      <p className="text-elder-base text-muted-foreground">
+                        这一层暂时还没有识别到明确亲属。可以在资料页补充称呼，或在回忆里多提一次名字、关系和一起发生的事情。
+                      </p>
+                    </div>
+                  )}
+                </section>
+              ))}
+            </div>
+          </section>
+
+          <MemoryVideoSection />
 
           <section className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
             <article className="card-warm space-y-5">

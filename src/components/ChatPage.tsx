@@ -825,6 +825,15 @@ export function ChatPage({
             <p className="mt-2 text-elder-base text-foreground">{currentPrompt.familyHint}</p>
           </div>
         ) : null}
+
+        {userProfile.memoryConcern ? (
+          <div className="max-w-3xl mx-auto mt-4 rounded-3xl bg-card/80 px-5 py-4 shadow-card">
+            <p className="text-elder-sm text-muted-foreground">当前陪伴方式</p>
+            <p className="mt-2 text-elder-base text-foreground">
+              已开启更温和的回想节奏。系统会优先使用更短的问题，并鼓励从人物、地点和照片开始慢慢说。
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">

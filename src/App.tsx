@@ -5,6 +5,7 @@ import { ChatPage } from './components/ChatPage'
 import { MemoryPage } from './components/MemoryPage'
 import { JourneyPage } from './components/JourneyPage'
 import { DailyRecallPage } from './components/DailyRecallPage'
+import type { DailyRecallLogEntry } from './lib/dailyRecall'
 import { getBrowserSessionId, getSessionScopedKey } from './lib/session'
 import {
   createDefaultUserProfile,
@@ -37,6 +38,8 @@ export interface Memory {
 interface StoredMemory extends Omit<Memory, 'timestamp'> {
   timestamp: string
 }
+
+interface StoredDailyRecallLogEntry extends DailyRecallLogEntry {}
 
 interface EntryPreset {
   operatorRole: OperatorRole
@@ -223,6 +226,58 @@ function saveMemories(storageKey: string, memories: Memory[]) {
   }
 }
 
+function getLocalDayKey(value: string) {
+  const date = new Date(value)
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function loadDailyRecallHistory(storageKey: string): DailyRecallLogEntry[] {
+  if (typeof window === 'undefined') {
+    return []
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(storageKey)
+    if (!raw) {
+      return []
+    }
+
+    const parsed = JSON.parse(raw) as StoredDailyRecallLogEntry[]
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+
+    return parsed.filter(
+      (entry) =>
+        typeof entry.id === 'string'
+        && typeof entry.itemId === 'string'
+        && typeof entry.itemTitle === 'string'
+        && typeof entry.prompt === 'string'
+        && typeof entry.topic === 'string'
+        && typeof entry.responseState === 'string'
+        && typeof entry.answer === 'string'
+        && typeof entry.recordedAt === 'string',
+    )
+  } catch {
+    return []
+  }
+}
+
+function saveDailyRecallHistory(storageKey: string, history: DailyRecallLogEntry[]) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.sessionStorage.setItem(storageKey, JSON.stringify(history))
+  } catch {
+    // Ignore storage write failures and keep the in-memory copy usable.
+  }
+}
+
 function App() {
   const sessionIdRef = useRef('')
   if (!sessionIdRef.current) {
@@ -239,12 +294,23 @@ function App() {
     profileStorageKeyRef.current = getSessionScopedKey('profile', sessionIdRef.current)
   }
 
+  const dailyRecallHistoryStorageKeyRef = useRef('')
+  if (!dailyRecallHistoryStorageKeyRef.current) {
+    dailyRecallHistoryStorageKeyRef.current = getSessionScopedKey(
+      'daily-recall-history',
+      sessionIdRef.current,
+    )
+  }
+
   const [currentPage, setCurrentPage] = useState<Page>('welcome')
   const [memories, setMemories] = useState<Memory[]>(() =>
     loadMemories(memoriesStorageKeyRef.current),
   )
   const [userProfile, setUserProfile] = useState<UserProfile | null>(() =>
     loadProfile(profileStorageKeyRef.current),
+  )
+  const [dailyRecallHistory, setDailyRecallHistory] = useState<DailyRecallLogEntry[]>(() =>
+    loadDailyRecallHistory(dailyRecallHistoryStorageKeyRef.current),
   )
   const [profileEntryPreset, setProfileEntryPreset] = useState<EntryPreset>(SELF_STORY_PRESET)
 
@@ -256,8 +322,22 @@ function App() {
     saveProfile(profileStorageKeyRef.current, userProfile)
   }, [userProfile])
 
+  useEffect(() => {
+    saveDailyRecallHistory(dailyRecallHistoryStorageKeyRef.current, dailyRecallHistory)
+  }, [dailyRecallHistory])
+
   const addMemory = (memory: Memory) => {
     setMemories(prev => [...prev, memory])
+  }
+
+  const addDailyRecallLog = (entry: DailyRecallLogEntry) => {
+    setDailyRecallHistory((previous) => {
+      const dayKey = getLocalDayKey(entry.recordedAt)
+      const next = previous.filter(
+        (item) => !(item.itemId === entry.itemId && getLocalDayKey(item.recordedAt) === dayKey),
+      )
+      return [...next, entry]
+    })
   }
 
   return (
@@ -279,6 +359,7 @@ function App() {
             setCurrentPage(userProfile ? 'chat' : 'profile')
           }}
           onOpenDailyRecall={() => setCurrentPage('daily-recall')}
+          dailyRecallHistory={dailyRecallHistory}
         />
       )}
       {currentPage === 'profile' && (
@@ -322,6 +403,7 @@ function App() {
         <DailyRecallPage
           memories={memories}
           userProfile={userProfile}
+          onRecordDailyRecall={addDailyRecallLog}
           onBack={() => setCurrentPage('welcome')}
           onGoHome={() => setCurrentPage('welcome')}
           onOpenStory={() => setCurrentPage(userProfile ? 'chat' : 'profile')}

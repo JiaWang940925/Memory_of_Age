@@ -13,9 +13,11 @@ import type { Memory } from '../App'
 import {
   buildDailyRecallFeedback,
   buildDailyRecallItems,
+  buildDailyRecallLogEntry,
   buildDailyRecallOpening,
   openDailyRecallFile,
   type DailyRecallAssessment,
+  type DailyRecallLogEntry,
   type DailyRecallResponseState,
 } from '../lib/dailyRecall'
 import type { UserProfile } from '../lib/userProfile'
@@ -23,6 +25,7 @@ import type { UserProfile } from '../lib/userProfile'
 interface DailyRecallPageProps {
   memories: Memory[]
   userProfile: UserProfile | null
+  onRecordDailyRecall: (entry: DailyRecallLogEntry) => void
   onBack: () => void
   onGoHome: () => void
   onOpenStory: () => void
@@ -58,6 +61,7 @@ const responseActions: Array<{
 export function DailyRecallPage({
   memories,
   userProfile,
+  onRecordDailyRecall,
   onBack,
   onGoHome,
   onOpenStory,
@@ -92,6 +96,13 @@ export function DailyRecallPage({
       return
     }
 
+    onRecordDailyRecall(
+      buildDailyRecallLogEntry({
+        item: currentItem,
+        answer,
+        responseState,
+      }),
+    )
     setSelectedState(responseState)
     setAssessment(
       buildDailyRecallFeedback({
