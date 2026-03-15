@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
-import { Send, BookOpen, Sparkles, RefreshCw, Mic, Square, ImagePlus, X, Home } from 'lucide-react'
+import { Send, BookOpen, Sparkles, RefreshCw, Mic, Square, ImagePlus, X, Home, Heart } from 'lucide-react'
 import type { Page, Memory, PhotoAttachment } from '../App'
 import { decodeAudioBlobToMonoPcm } from '../lib/audio'
 import {
@@ -746,6 +746,16 @@ export function ChatPage({
             >
               <Home className="h-5 w-5" />
               返回主页
+            </button>
+
+            <button
+              onClick={() => onNavigate('daily-recall')}
+              className="btn-daily-recall w-full justify-center sm:w-auto"
+            >
+              <span className="btn-daily-recall-icon">
+                <Heart className="h-5 w-5" />
+              </span>
+              {"\u6bcf\u65e5\u56de\u60f3"}
             </button>
 
             <button
