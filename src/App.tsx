@@ -306,6 +306,7 @@ function App() {
           userProfile={userProfile}
           onBack={() => setCurrentPage('chat')}
           onGoHome={() => setCurrentPage('welcome')}
+          onOpenDailyRecall={() => setCurrentPage('daily-recall')}
           onOpenJourney={() => setCurrentPage('journey')}
         />
       )}

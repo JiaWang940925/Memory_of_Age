@@ -22,6 +22,7 @@ interface MemoryPageProps {
   userProfile: UserProfile | null
   onBack: () => void
   onGoHome: () => void
+  onOpenDailyRecall: () => void
   onOpenJourney: () => void
 }
 
@@ -55,6 +56,7 @@ export function MemoryPage({
   userProfile,
   onBack,
   onGoHome,
+  onOpenDailyRecall,
   onOpenJourney,
 }: MemoryPageProps) {
   const [storyExportStatus, setStoryExportStatus] = useState(
@@ -114,10 +116,21 @@ export function MemoryPage({
               </div>
             </div>
 
-            <button onClick={onGoHome} className="btn-outline w-full justify-center sm:w-auto">
-              <Home className="h-5 w-5" />
-              返回主页
-            </button>
+            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+              <button onClick={onGoHome} className="btn-outline w-full justify-center sm:w-auto">
+                <Home className="h-5 w-5" />
+                返回主页
+              </button>
+              <button
+                onClick={onOpenDailyRecall}
+                className="btn-daily-recall w-full justify-center sm:w-auto"
+              >
+                <span className="btn-daily-recall-icon">
+                  <Heart className="h-5 w-5" />
+                </span>
+                {"\u6bcf\u65e5\u56de\u60f3"}
+              </button>
+            </div>
           </div>
         </header>
 
@@ -160,10 +173,21 @@ export function MemoryPage({
             </div>
           </div>
 
-          <button onClick={onGoHome} className="btn-outline w-full justify-center sm:w-auto">
-            <Home className="h-5 w-5" />
-            返回主页
-          </button>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+            <button onClick={onGoHome} className="btn-outline w-full justify-center sm:w-auto">
+              <Home className="h-5 w-5" />
+              返回主页
+            </button>
+            <button
+              onClick={onOpenDailyRecall}
+              className="btn-daily-recall w-full justify-center sm:w-auto"
+            >
+              <span className="btn-daily-recall-icon">
+                <Heart className="h-5 w-5" />
+              </span>
+              {"\u6bcf\u65e5\u56de\u60f3"}
+            </button>
+          </div>
         </div>
       </header>
 
