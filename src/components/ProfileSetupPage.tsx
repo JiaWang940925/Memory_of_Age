@@ -248,6 +248,25 @@ export function ProfileSetupPage({
                       className="h-5 w-5 accent-[hsl(var(--primary))]"
                     />
                   </label>
+                  <label className="rounded-2xl border border-border bg-accent/25 px-4 py-4">
+                    <span className="block text-elder-base text-foreground">
+                      老人是否有记忆困扰（如记忆力下降、阿兹海默症）
+                    </span>
+                    <span className="mt-2 block text-elder-sm text-muted-foreground">
+                      此信息仅用于调整提问方式，帮助更温和地引导回忆。
+                    </span>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-elder-sm text-muted-foreground">
+                        {form.memoryConcern ? '已勾选：需要更温和的提问方式' : '未勾选'}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={form.memoryConcern}
+                        onChange={(event) => updateField('memoryConcern', event.target.checked)}
+                        className="h-5 w-5 accent-[hsl(var(--primary))]"
+                      />
+                    </div>
+                  </label>
                 </div>
               </div>
             </article>

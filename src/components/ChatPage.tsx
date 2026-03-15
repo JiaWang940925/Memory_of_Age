@@ -7,6 +7,7 @@ import {
   buildInterviewPrompts,
   buildOpeningQuestion,
   buildSmartResponse,
+  inferCoveredPromptIds,
   getInitialAskedPromptIds,
   pickNextPrompt,
 } from '../lib/conversation'
@@ -21,8 +22,8 @@ import {
 import {
   buildHouseholdSummary,
   buildProfileSummary,
-  getInterviewModeForProfile,
   getOperatorRoleLabel,
+  getPromptStyleForProfile,
   type UserProfile,
 } from '../lib/userProfile'
 
@@ -173,14 +174,16 @@ export function ChatPage({
     )
   }
 
-  const interviewMode = getInterviewModeForProfile(userProfile)
-  const promptPlan = buildInterviewPrompts(userProfile, interviewMode)
+  const promptStyle = getPromptStyleForProfile(userProfile)
+  const promptPlan = buildInterviewPrompts(userProfile, promptStyle)
   const eventReminders = buildEventReminders(userProfile)
   const memoryAskedPromptIds = getInitialAskedPromptIds(promptPlan, memories)
+  const inferredCoveredPromptIds = inferCoveredPromptIds(userProfile, memories)
   const storedAskedPromptIds = loadAskedPromptIds(askedPromptIdsStorageKeyRef.current)
   const initialCoveredPromptIds = dedupePromptIds([
     ...storedAskedPromptIds,
     ...memoryAskedPromptIds,
+    ...inferredCoveredPromptIds,
   ])
   const initialPrompt = pickNextPrompt(promptPlan, initialCoveredPromptIds)
   const initialShownPromptIds = initialPrompt
@@ -191,7 +194,7 @@ export function ChatPage({
     {
       id: '1',
       role: 'ai',
-      content: buildOpeningQuestion(userProfile, initialPrompt, interviewMode),
+      content: buildOpeningQuestion(userProfile, initialPrompt, promptStyle),
     },
   ])
   const [input, setInput] = useState('')
@@ -549,7 +552,7 @@ export function ChatPage({
         emotion,
         hasPhotos,
         nextPrompt,
-        mode: interviewMode,
+        styleOrMode: promptStyle,
       }),
     }
 
@@ -727,7 +730,11 @@ export function ChatPage({
             <div>
               <h1 className="text-elder-xl font-bold text-foreground">岁语</h1>
               <p className="text-elder-sm text-muted-foreground">
-                {interviewMode === 'family-assist' ? '正在陪家人一起整理回忆' : '正在倾听您的故事'}
+                {promptStyle.base === 'family'
+                  ? '正在陪家人一起整理回忆'
+                  : promptStyle.base === 'caregiver'
+                    ? '正在协助整理回忆'
+                    : '正在倾听您的故事'}
               </p>
             </div>
           </div>
@@ -768,7 +775,11 @@ export function ChatPage({
           <div className="rounded-3xl bg-card/80 px-5 py-4 shadow-card">
             <p className="text-elder-sm text-muted-foreground">当前使用方式</p>
             <p className="mt-2 text-elder-base font-semibold text-foreground">
-              {interviewMode === 'family-assist' ? '家属陪访模式' : '老人自述模式'}
+              {promptStyle.base === 'family'
+                ? '家属陪访模式'
+                : promptStyle.base === 'caregiver'
+                  ? '照护协助模式'
+                  : '老人自述模式'}
             </p>
             <p className="mt-2 text-elder-sm text-muted-foreground">
               {buildHouseholdSummary(userProfile)}
@@ -798,7 +809,7 @@ export function ChatPage({
           </div>
         )}
 
-        {interviewMode === 'family-assist' && currentPrompt?.familyHint ? (
+        {promptStyle.base !== 'self' && currentPrompt?.familyHint ? (
           <div className="max-w-3xl mx-auto mt-4 rounded-3xl bg-card/80 px-5 py-4 shadow-card">
             <p className="text-elder-sm text-muted-foreground">给家属的追问建议</p>
             <p className="mt-2 text-elder-base text-foreground">{currentPrompt.familyHint}</p>
@@ -924,9 +935,11 @@ export function ChatPage({
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyPress}
               placeholder={
-                interviewMode === 'family-assist'
+                promptStyle.base === 'family'
                   ? '可以记录老人刚刚说的话，也可以先记下关键人物、地点和生活细节。'
-                  : '请慢慢讲述您的故事...'
+                  : promptStyle.base === 'caregiver'
+                    ? '请简要记录老人讲述的关键信息...'
+                    : '请慢慢讲述您的故事...'
               }
               className="input-warm resize-none xl:flex-1"
               rows={3}
@@ -997,9 +1010,9 @@ export function ChatPage({
             </span>
             <span className="text-elder-base text-muted-foreground">{photoStatus}</span>
             <span className="hidden lg:inline text-elder-base text-muted-foreground">
-              {interviewMode === 'family-assist'
-                ? '可先从称呼、地点和照片开始追问，系统会尽量避免重复提问'
-                : '已记录的问题不会重复提问，可覆盖童年到晚年多个阶段'}
+              {promptStyle.base === 'self'
+                ? '已记录的问题不会重复提问，可覆盖童年到晚年多个阶段'
+                : '可先从称呼、地点和照片开始追问，系统会尽量避免重复提问'}
             </span>
             <button
               onClick={handleSwitchTopic}

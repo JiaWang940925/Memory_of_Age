@@ -14,6 +14,13 @@ export type RelationshipToElder =
 
 export type InterviewMode = 'self-narration' | 'family-assist' | 'gentle-recall'
 
+export type PromptStyleBase = 'self' | 'family' | 'caregiver'
+
+export interface PromptStyle {
+  base: PromptStyleBase
+  gentle: boolean
+}
+
 export interface UserProfile {
   fullName: string
   familyCallName: string
@@ -29,6 +36,7 @@ export interface UserProfile {
   operatorRole: OperatorRole
   relationshipToElder: RelationshipToElder
   isElderPresent: boolean
+  memoryConcern: boolean
 }
 
 export function createDefaultUserProfile(): UserProfile {
@@ -47,6 +55,7 @@ export function createDefaultUserProfile(): UserProfile {
     operatorRole: 'elder-self',
     relationshipToElder: 'self',
     isElderPresent: true,
+    memoryConcern: false,
   }
 }
 
@@ -107,6 +116,20 @@ export function getInterviewModeForProfile(profile: UserProfile): InterviewMode 
   return profile.operatorRole === 'elder-self' ? 'self-narration' : 'family-assist'
 }
 
+export function getPromptStyleForProfile(profile: UserProfile): PromptStyle {
+  const base: PromptStyleBase =
+    profile.operatorRole === 'elder-self'
+      ? 'self'
+      : profile.operatorRole === 'caregiver'
+        ? 'caregiver'
+        : 'family'
+
+  return {
+    base,
+    gentle: Boolean(profile.memoryConcern),
+  }
+}
+
 export function formatBirthDate(birthDate: string) {
   const date = new Date(birthDate)
   if (Number.isNaN(date.getTime())) {
@@ -152,6 +175,7 @@ export function buildHouseholdSummary(profile: UserProfile) {
     `与老人关系 ${getRelationshipLabel(profile.relationshipToElder)}`,
     profile.isElderPresent ? '老人当前在场' : '老人当前不在场',
     profile.allowFamilyEditing ? '允许家属继续补充' : '仅保留老人本人内容',
+    profile.memoryConcern ? '记忆困扰：已提示' : '记忆困扰：未说明',
   ]
 
   if (profile.importantFamilyMembers.trim()) {
