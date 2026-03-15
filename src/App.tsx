@@ -107,6 +107,10 @@ function loadProfile(storageKey: string): UserProfile | null {
         typeof parsed.memoryTriggers === 'string'
           ? parsed.memoryTriggers
           : profile.memoryTriggers,
+      memoryConcern:
+        typeof parsed.memoryConcern === 'boolean'
+          ? parsed.memoryConcern
+          : profile.memoryConcern,
       allowFamilyEditing:
         typeof parsed.allowFamilyEditing === 'boolean'
           ? parsed.allowFamilyEditing
